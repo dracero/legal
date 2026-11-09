@@ -31,28 +31,23 @@ export interface SHACLValidationReport {
 }
 
 /**
- * 1. Validador SHACL Pre-Ingesta (100% impulsado por fiuba:OKFNodeShape en shapes.ttl)
+ * 1. Validador SHACL Pre-Ingesta (Evaluado con legal:OKFNodeShape en shapes.ttl)
  */
 export async function validateOKFEntryWithSHACL(node: Partial<OKFNode>): Promise<SHACLValidationReport> {
   const ns = APP_CONFIG.shacl.ontologyNamespace;
   const safeId = (node.okf_id || 'nodo_sin_id').replace(/[^a-zA-Z0-9_-]/g, '_');
-  const especialidades = Array.isArray(node.especialidades_fiuba) ? node.especialidades_fiuba : [];
 
   const lines: string[] = [
-    `@prefix fiuba: <${ns}> .`,
+    `@prefix legal: <${ns}> .`,
     '@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .',
     '',
-    `fiuba:${safeId} a fiuba:OKFEntry ;`,
+    `legal:${safeId} a legal:OKFEntry ;`,
   ];
 
-  if (node.okf_id) lines.push(`  fiuba:okf_id "${escapeTurtle(node.okf_id)}" ;`);
-  if (node.title) lines.push(`  fiuba:title "${escapeTurtle(node.title)}" ;`);
-  if (node.jurisdiction) lines.push(`  fiuba:jurisdiction "${escapeTurtle(node.jurisdiction)}" ;`);
-  if (node.status) lines.push(`  fiuba:status "${escapeTurtle(node.status)}" ;`);
-  if (node.shape_role) lines.push(`  fiuba:shape_role "${escapeTurtle(node.shape_role)}" ;`);
-  for (const esp of especialidades) {
-    lines.push(`  fiuba:especialidad "${escapeTurtle(esp)}" ;`);
-  }
+  if (node.okf_id) lines.push(`  legal:okf_id "${escapeTurtle(node.okf_id)}" ;`);
+  if (node.title) lines.push(`  legal:title "${escapeTurtle(node.title)}" ;`);
+  if (node.status) lines.push(`  legal:status "${escapeTurtle(node.status)}" ;`);
+  if (node.content) lines.push(`  legal:content "${escapeTurtle(node.content.slice(0, 500))}" ;`);
 
   lines[lines.length - 1] = lines[lines.length - 1].replace(/;$/, '.');
   const dataTurtle = lines.join('\n');
@@ -63,9 +58,9 @@ export async function validateOKFEntryWithSHACL(node: Partial<OKFNode>): Promise
   const report = await validator.validate(dataDataset);
 
   const violations = (report.results || []).map((r: any) => ({
-    path: r.path?.value ? r.path.value.replace(ns, 'fiuba:') : 'fiuba:OKFEntry',
-    message: r.message?.[0]?.value || 'Violación de restricción SHACL.',
-    focusNode: r.focusNode?.value ? r.focusNode.value.replace(ns, 'fiuba:') : `fiuba:${safeId}`,
+    path: r.path?.value ? r.path.value.replace(ns, 'legal:') : 'legal:OKFEntry',
+    message: r.message?.[0]?.value || 'Violación de restricción SHACL en norma.',
+    focusNode: r.focusNode?.value ? r.focusNode.value.replace(ns, 'legal:') : `legal:${safeId}`,
   }));
 
   return {
@@ -79,7 +74,7 @@ export async function validateOKFEntryWithSHACL(node: Partial<OKFNode>): Promise
 }
 
 /**
- * 2. Validador SHACL Pre-Generación sobre el Subgrafo Recuperado de Neo4j (fiuba:LegalAnalysisShape en shapes.ttl)
+ * 2. Validador SHACL Pre-Generación sobre el Subgrafo Recuperado de Neo4j (legal:LegalAnalysisShape)
  */
 export async function validarGrafoConSHACL(
   subgrafo: OKFNode[],
@@ -88,26 +83,17 @@ export async function validarGrafoConSHACL(
   const ns = APP_CONFIG.shacl.ontologyNamespace;
   const vigentes = subgrafo.filter((n) => n.status === 'Vigente');
 
-  const roleToPredicate: Record<string, string> = {
-    NormaFondo: 'hasNormaFondo',
-    PrincipioDeResponsabilidad: 'hasPrincipioResponsabilidad',
-    MarcoEjercicioProfesional: 'hasMarcoEjercicio',
-    EticaProfesional: 'hasEticaProfesional',
-  };
-
   const lines: string[] = [
-    `@prefix fiuba: <${ns}> .`,
+    `@prefix legal: <${ns}> .`,
     '@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .',
     '',
-    'fiuba:DictamenCasoActual a fiuba:DictamenLegal ;',
-    '  fiuba:connectsHechoIngenieril "true"^^xsd:boolean ;',
+    'legal:DictamenCasoActual a legal:DictamenLegal ;',
+    '  legal:connectsHechosCaso "true"^^xsd:boolean ;',
   ];
 
   for (const node of vigentes) {
     const safeId = node.okf_id.replace(/[^a-zA-Z0-9_-]/g, '_');
-    const pred = roleToPredicate[node.shape_role] || 'hasNormaFondo';
-    lines.push(`  fiuba:hasNormaVigente fiuba:${safeId} ;`);
-    lines.push(`  fiuba:${pred} fiuba:${safeId} ;`);
+    lines.push(`  legal:hasNormaVigente legal:${safeId} ;`);
   }
 
   const presentIds = new Set(vigentes.map((n) => n.okf_id));
@@ -115,7 +101,7 @@ export async function validarGrafoConSHACL(
   for (const reqId of directivasOPA.nodos_okf_obligatorios || []) {
     if (!presentIds.has(reqId)) {
       missingOkfIds.push(reqId);
-      lines.push(`  fiuba:missingRequiredOPANode "${escapeTurtle(reqId)}" ;`);
+      lines.push(`  legal:missingRequiredOPANode "${escapeTurtle(reqId)}" ;`);
     }
   }
 
@@ -135,9 +121,9 @@ export async function validarGrafoConSHACL(
       missingShapeRoles.push(parts[0]);
     }
     return {
-      path: r.path?.value ? r.path.value.replace(ns, 'fiuba:') : 'fiuba:DictamenLegal',
+      path: r.path?.value ? r.path.value.replace(ns, 'legal:') : 'legal:DictamenLegal',
       message: parts.length === 2 ? parts[1] : rawMsg,
-      focusNode: r.focusNode?.value ? r.focusNode.value.replace(ns, 'fiuba:') : 'fiuba:DictamenCasoActual',
+      focusNode: r.focusNode?.value ? r.focusNode.value.replace(ns, 'legal:') : 'legal:DictamenCasoActual',
     };
   });
 
@@ -152,7 +138,7 @@ export async function validarGrafoConSHACL(
 }
 
 /**
- * 3. Auditor Epistémico Post-Generación (Evaluado con fiuba:EpistemicAuditShape en shapes.ttl)
+ * 3. Auditor Epistémico Post-Generación (legal:EpistemicAuditShape)
  */
 export interface EpistemicAuditResult {
   passed: boolean;
@@ -173,7 +159,7 @@ export async function auditarDictamenEpistemico(
   const ns = APP_CONFIG.shacl.ontologyNamespace;
   const validNodeMap = new Map<string, OKFNode>(subgrafo.map((n) => [n.okf_id.toLowerCase(), n]));
 
-  // Extraer todas las citas explícitas [norma-...] del documento generado
+  // Extraer todas las citas explícitas [norma-...] del dictamen
   const citationMatches = Array.from(dictamenMarkdown.matchAll(/\[(norma-[a-z0-9_-]+)\]/gi));
   const citedSet = new Set<string>();
   const unverifiedSet = new Set<string>();
@@ -187,7 +173,7 @@ export async function auditarDictamenEpistemico(
     }
   }
 
-  // También verificar menciones directas de okf_id sin corchetes
+  // Verificar menciones de okf_id directo en texto
   const lowerText = dictamenMarkdown.toLowerCase();
   for (const node of subgrafo) {
     if (lowerText.includes(node.okf_id.toLowerCase())) {
@@ -200,22 +186,22 @@ export async function auditarDictamenEpistemico(
   const citedLawsMatched = citedOkfIds
     .map((id) => validNodeMap.get(id.toLowerCase()))
     .filter(Boolean)
-    .map((n) => `${n!.law_number} (${n!.title})`);
+    .map((n) => `${n!.law_number || n!.okf_id} (${n!.title})`);
 
   const lines: string[] = [
-    `@prefix fiuba: <${ns}> .`,
+    `@prefix legal: <${ns}> .`,
     '',
-    'fiuba:AuditoriaActual a fiuba:AuditoriaDictamen ;',
+    'legal:AuditoriaActual a legal:AuditoriaDictamen ;',
   ];
 
   for (const id of citedOkfIds) {
-    lines.push(`  fiuba:hasVerifiedCitation "${escapeTurtle(id)}" ;`);
+    lines.push(`  legal:hasVerifiedCitation "${escapeTurtle(id)}" ;`);
   }
   for (const badId of unverifiedCitations) {
-    lines.push(`  fiuba:hasHallucinatedCitation "${escapeTurtle(badId)}" ;`);
+    lines.push(`  legal:hasHallucinatedCitation "${escapeTurtle(badId)}" ;`);
   }
   if (citedOkfIds.length === 0 && unverifiedCitations.length === 0) {
-    lines.push('  fiuba:emptyAudit "true" ;');
+    lines.push('  legal:emptyAudit "true" ;');
   }
 
   lines[lines.length - 1] = lines[lines.length - 1].replace(/;$/, '.');
@@ -238,7 +224,7 @@ export async function auditarDictamenEpistemico(
     opaComplianceVerified,
     shaclPostConditionConforms,
     auditSummary: shaclPostConditionConforms
-      ? `Auditoría Epistémica SHACL Aprobada: ${citedOkfIds.length}/${subgrafo.length} nodos normativos del subgrafo Neo4j citados con trazabilidad exacta y 0 citas alucinadas.`
+      ? `Auditoría Epistémica SHACL Aprobada: ${citedOkfIds.length}/${subgrafo.length} normas del documento citadas con trazabilidad verificada y 0 citas alucinadas.`
       : `Alerta Epistémica SHACL: ${(report.results || []).map((r: any) => r.message?.[0]?.value).join(' | ')}`,
   };
 }

@@ -10,22 +10,38 @@ export interface OKFRelation {
   target: string;
 }
 
+export interface OntologicalEntity {
+  nombre: string;
+  categoria: string;
+  descripcion: string;
+}
+
+export interface DeonticRule {
+  id: string;
+  modalidad: 'OBLIGACION' | 'PROHIBICION' | 'PERMISION' | 'SANCION_NULIDAD';
+  sujeto_normado: string;
+  conducta: string;
+  condicion: string;
+  consecuencia: string;
+  palabras_clave?: string[];
+}
+
 export interface OKFNode {
   okf_id: string;
   title: string;
   node_type: string;
-  shape_role: string;
   law_number: string;
   article_number: string;
   hierarchy_level: string;
   domain: string;
   category: string;
   jurisdiction: string;
-  especialidades_fiuba: string[];
   status: string;
   last_updated: string;
   content: string;
   relations: OKFRelation[];
+  ontological_entities?: OntologicalEntity[];
+  deontic_rules?: DeonticRule[];
   score?: number;
   retrieval_reason?: string;
 }
@@ -54,6 +70,14 @@ export async function initLegalNeo4jSchema(): Promise<void> {
   try {
     await session.run(
       `CREATE CONSTRAINT legal_okf_id_unique IF NOT EXISTS FOR (n:LegalOKF) REQUIRE n.okf_id IS UNIQUE`
+    );
+
+    await session.run(
+      `CREATE CONSTRAINT concepto_nombre_unique IF NOT EXISTS FOR (c:ConceptoOntologico) REQUIRE c.nombre IS UNIQUE`
+    );
+
+    await session.run(
+      `CREATE CONSTRAINT regla_deontica_id_unique IF NOT EXISTS FOR (r:ReglaDeontica) REQUIRE r.id IS UNIQUE`
     );
 
     await session.run(`
@@ -94,12 +118,13 @@ export async function upsertOKFNodeToNeo4j(node: OKFNode): Promise<void> {
   const driver = getNeo4jDriver();
   const session = driver.session();
   try {
-    // Generar embedding con modelo Hugging Face (384 dimensiones)
     const embedding = await computeHuggingFaceEmbedding(
       `${node.title} ${node.law_number} ${node.category} ${node.content}`
     );
 
-    const safeLabel = (node.node_type || 'Norma').replace(/[^a-zA-Z0-9_]/g, '') || 'Norma';
+    const safeLabel = (node.node_type || 'Articulo').replace(/[^a-zA-Z0-9_]/g, '') || 'Articulo';
+    const ontologicalEntitiesJson = JSON.stringify(node.ontological_entities || []);
+    const deonticRulesJson = JSON.stringify(node.deontic_rules || []);
 
     await session.run(
       `
@@ -107,46 +132,80 @@ export async function upsertOKFNodeToNeo4j(node: OKFNode): Promise<void> {
       SET n:${safeLabel},
           n.title = $title,
           n.node_type = $node_type,
-          n.shape_role = $shape_role,
           n.law_number = $law_number,
           n.article_number = $article_number,
           n.hierarchy_level = $hierarchy_level,
           n.domain = $domain,
           n.category = $category,
           n.jurisdiction = $jurisdiction,
-          n.especialidades_fiuba = $especialidades_fiuba,
           n.status = $status,
           n.last_updated = $last_updated,
           n.content = $content,
-          n.embedding = $embedding
+          n.embedding = $embedding,
+          n.ontological_entities_json = $ontologicalEntitiesJson,
+          n.deontic_rules_json = $deonticRulesJson
       `,
       {
         okf_id: node.okf_id,
         title: node.title,
-        node_type: node.node_type,
-        shape_role: node.shape_role,
+        node_type: node.node_type || 'Articulo',
         law_number: node.law_number,
         article_number: node.article_number,
         hierarchy_level: node.hierarchy_level,
         domain: node.domain,
         category: node.category,
         jurisdiction: node.jurisdiction,
-        especialidades_fiuba: node.especialidades_fiuba,
         status: node.status,
         last_updated: node.last_updated,
         content: node.content,
         embedding,
+        ontologicalEntitiesJson,
+        deonticRulesJson,
       }
     );
 
-    for (const esp of node.especialidades_fiuba) {
+    // Persistir Entidades Ontológicas
+    for (const ent of node.ontological_entities || []) {
+      if (!ent.nombre) continue;
       await session.run(
         `
         MATCH (n:LegalOKF {okf_id: $okf_id})
-        MERGE (e:EspecialidadFIUBA {nombre: $esp})
-        MERGE (n)-[:APLICA_A_ESPECIALIDAD]->(e)
+        MERGE (c:ConceptoOntologico {nombre: $nombre})
+        SET c.categoria = $categoria, c.descripcion = $descripcion
+        MERGE (n)-[:DEFINE_CONCEPTO]->(c)
         `,
-        { okf_id: node.okf_id, esp }
+        {
+          okf_id: node.okf_id,
+          nombre: ent.nombre,
+          categoria: ent.categoria || 'ConceptoJuridico',
+          descripcion: ent.descripcion || '',
+        }
+      );
+    }
+
+    // Persistir Reglas Deónticas
+    for (const regla of node.deontic_rules || []) {
+      if (!regla.id) continue;
+      await session.run(
+        `
+        MATCH (n:LegalOKF {okf_id: $okf_id})
+        MERGE (r:ReglaDeontica {id: $reglaId})
+        SET r.modalidad = $modalidad,
+            r.sujeto_normado = $sujeto,
+            r.conducta = $conducta,
+            r.condicion = $condicion,
+            r.consecuencia = $consecuencia
+        MERGE (n)-[:ESTABLECE_DEBER]->(r)
+        `,
+        {
+          okf_id: node.okf_id,
+          reglaId: regla.id,
+          modalidad: regla.modalidad,
+          sujeto: regla.sujeto_normado,
+          conducta: regla.conducta,
+          condicion: regla.condicion,
+          consecuencia: regla.consecuencia,
+        }
       );
     }
   } finally {
@@ -157,7 +216,6 @@ export async function upsertOKFNodeToNeo4j(node: OKFNode): Promise<void> {
 export async function linkOKFRelationsInNeo4j(nodes: OKFNode[]): Promise<void> {
   const driver = getNeo4jDriver();
   const session = driver.session();
-
   try {
     for (const node of nodes) {
       for (const rel of node.relations || []) {
@@ -195,18 +253,18 @@ export async function readLocalOKFFiles(): Promise<OKFNode[]> {
       okf_id: String(data.okf_id),
       title: String(data.title || data.okf_id),
       node_type: String(data.node_type || 'Articulo'),
-      shape_role: String(data.shape_role || 'NormaFondo'),
       law_number: String(data.law_number || ''),
       article_number: String(data.article_number || ''),
       hierarchy_level: String(data.hierarchy_level || ''),
-      domain: String(data.domain || ''),
+      domain: String(data.domain || 'Derecho_General'),
       category: String(data.category || ''),
-      jurisdiction: String(data.jurisdiction || ''),
-      especialidades_fiuba: Array.isArray(data.especialidades_fiuba) ? data.especialidades_fiuba : [],
-      status: String(data.status || ''),
+      jurisdiction: String(data.jurisdiction || 'General'),
+      status: String(data.status || 'Vigente'),
       last_updated: String(data.last_updated || ''),
       content: content.trim(),
       relations: Array.isArray(data.relations) ? data.relations : [],
+      ontological_entities: Array.isArray(data.ontological_entities) ? data.ontological_entities : [],
+      deontic_rules: Array.isArray(data.deontic_rules) ? data.deontic_rules : [],
     });
   }
 
@@ -236,35 +294,43 @@ export async function ensureNeo4jSeeded(): Promise<{ count: number }> {
   }
 }
 
+function parseJsonField<T>(field: any, defaultValue: T): T {
+  if (!field) return defaultValue;
+  if (typeof field !== 'string') return field as T;
+  try {
+    return JSON.parse(field);
+  } catch {
+    return defaultValue;
+  }
+}
+
 function recordToOKFNode(props: any, score = 1.0, reason = 'Directo'): OKFNode {
   return {
     okf_id: props.okf_id,
     title: props.title,
     node_type: props.node_type || 'Articulo',
-    shape_role: props.shape_role || 'NormaFondo',
     law_number: props.law_number || '',
     article_number: props.article_number || '',
     hierarchy_level: props.hierarchy_level || '',
-    domain: props.domain || '',
+    domain: props.domain || 'Derecho_General',
     category: props.category || '',
-    jurisdiction: props.jurisdiction || '',
-    especialidades_fiuba: Array.isArray(props.especialidades_fiuba) ? props.especialidades_fiuba : [],
-    status: props.status || '',
+    jurisdiction: props.jurisdiction || 'General',
+    status: props.status || 'Vigente',
     last_updated: props.last_updated || '',
     content: props.content || '',
     relations: [],
+    ontological_entities: parseJsonField<OntologicalEntity[]>(props.ontological_entities_json, []),
+    deontic_rules: parseJsonField<DeonticRule[]>(props.deontic_rules_json, []),
     score,
     retrieval_reason: reason,
   };
 }
 
 /**
- * PASO 3: Búsqueda Híbrida en Neo4j (BM25 Full-Text + Hugging Face Vectorial + Directivas OPA + Expansión Cypher a 2 saltos)
+ * Búsqueda Híbrida en Neo4j (BM25 Full-Text + Hugging Face Vectorial + Directivas OPA + Expansión Cypher)
  */
 export async function hybridRetrieveAndExpandSubgraph(options: {
   queryText: string;
-  especialidad: string;
-  jurisdiccion: string;
   obligatoriosOPA: string[];
   limit?: number;
 }): Promise<{ nodes: OKFNode[]; edges: GraphEdge[] }> {
@@ -274,11 +340,12 @@ export async function hybridRetrieveAndExpandSubgraph(options: {
   const nodeMap = new Map<string, OKFNode>();
 
   try {
-    // 1. Búsqueda Léxica BM25 sobre el índice Full-Text de Neo4j
+    // 1. Búsqueda Léxica BM25
     const sanitizedLucene = options.queryText
       .replace(/[+\-&|!(){}[\]^"~*?:\\/]/g, ' ')
       .trim()
       .split(/\s+/)
+      .filter((w) => w.length > 2)
       .slice(0, 24)
       .join(' OR ');
 
@@ -289,8 +356,6 @@ export async function hybridRetrieveAndExpandSubgraph(options: {
           CALL db.index.fulltext.queryNodes($indexName, $luceneQuery)
           YIELD node, score
           WHERE node.status = 'Vigente'
-            AND ($especialidad IN node.especialidades_fiuba OR 'Todas' IN node.especialidades_fiuba)
-            AND (node.jurisdiction = 'Nacional' OR node.jurisdiction = 'Todas' OR node.jurisdiction = $jurisdiccion)
           RETURN node, score
           ORDER BY score DESC
           LIMIT $k
@@ -298,8 +363,6 @@ export async function hybridRetrieveAndExpandSubgraph(options: {
           {
             indexName: APP_CONFIG.neo4j.fulltextIndexName,
             luceneQuery: sanitizedLucene,
-            especialidad: options.especialidad,
-            jurisdiccion: options.jurisdiccion,
             k: neo4j.int(options.limit || 8),
           }
         );
@@ -322,8 +385,6 @@ export async function hybridRetrieveAndExpandSubgraph(options: {
         CALL db.index.vector.queryNodes($indexName, $k, $queryVector)
         YIELD node, score
         WHERE node.status = 'Vigente'
-          AND ($especialidad IN node.especialidades_fiuba OR 'Todas' IN node.especialidades_fiuba)
-          AND (node.jurisdiction = 'Nacional' OR node.jurisdiction = 'Todas' OR node.jurisdiction = $jurisdiccion)
         RETURN node, score
         ORDER BY score DESC
         `,
@@ -331,8 +392,6 @@ export async function hybridRetrieveAndExpandSubgraph(options: {
           indexName: APP_CONFIG.neo4j.vectorIndexName,
           k: neo4j.int(options.limit || 8),
           queryVector,
-          especialidad: options.especialidad,
-          jurisdiccion: options.jurisdiccion,
         }
       );
 
@@ -377,8 +436,6 @@ export async function hybridRetrieveAndExpandSubgraph(options: {
       }
     }
 
-    // Si tras BM25, Vector Search y OPA el subgrafo quedó vacío pero existen normas cargadas por el usuario,
-    // se incorporan las normas vigentes disponibles en Neo4j para analizar lo subido
     if (nodeMap.size === 0) {
       const allLoadedRes = await session.run(
         `
@@ -390,11 +447,11 @@ export async function hybridRetrieveAndExpandSubgraph(options: {
       );
       for (const rec of allLoadedRes.records) {
         const props = rec.get('n').properties;
-        nodeMap.set(props.okf_id, recordToOKFNode(props, 0.85, 'Norma Cargada por el Usuario'));
+        nodeMap.set(props.okf_id, recordToOKFNode(props, 0.85, 'Norma Cargada'));
       }
     }
 
-    // 4. Expansión Cypher de Vecindario (hasta 2 saltos relacionales sobre aristas normativas)
+    // 4. Expansión Cypher
     const seedIds = Array.from(nodeMap.keys());
     if (seedIds.length > 0) {
       const expRes = await session.run(
@@ -451,13 +508,11 @@ export async function hybridRetrieveAndExpandSubgraph(options: {
 }
 
 /**
- * PASO 4 (Autorreparación SHACL): Completa de manera determinista los nodos que el validador SHACL reclamó
+ * Autorreparación SHACL: Completa de manera determinista los IDs requeridos por OPA
  */
 export async function completarNodosFaltantesNeo4j(
   subgrafoActual: OKFNode[],
-  missingShapeRoles: string[],
-  missingOkfIds: string[],
-  jurisdiccion: string
+  missingOkfIds: string[]
 ): Promise<OKFNode[]> {
   const driver = getNeo4jDriver();
   const session = driver.session();
@@ -482,29 +537,6 @@ export async function completarNodosFaltantesNeo4j(
       }
     }
 
-    if (missingShapeRoles.length > 0) {
-      const byRoleRes = await session.run(
-        `
-        MATCH (n:LegalOKF)
-        WHERE n.shape_role IN $missingShapeRoles
-          AND n.status = 'Vigente'
-          AND (n.jurisdiction = 'Nacional' OR n.jurisdiction = 'Todas' OR n.jurisdiction = $jurisdiccion)
-        RETURN n
-        LIMIT 6
-        `,
-        { missingShapeRoles, jurisdiccion }
-      );
-      for (const rec of byRoleRes.records) {
-        const props = rec.get('n').properties;
-        if (!currentMap.has(props.okf_id)) {
-          currentMap.set(
-            props.okf_id,
-            recordToOKFNode(props, 0.92, `Autorreparación SHACL (Shape: ${props.shape_role})`)
-          );
-        }
-      }
-    }
-
     return Array.from(currentMap.values());
   } finally {
     await session.close();
@@ -514,9 +546,7 @@ export async function completarNodosFaltantesNeo4j(
 export async function getAllCatalogOKFNodes(): Promise<{
   nodes: OKFNode[];
   edges: GraphEdge[];
-  especialidades: string[];
   jurisdicciones: string[];
-  shapeRoles: string[];
 }> {
   await ensureNeo4jSeeded();
   const driver = getNeo4jDriver();
@@ -535,18 +565,12 @@ export async function getAllCatalogOKFNodes(): Promise<{
       type: r.get('relType'),
     }));
 
-    const espRes = await session.run(`MATCH (e:EspecialidadFIUBA) RETURN DISTINCT e.nombre AS nombre ORDER BY nombre ASC`);
-    const especialidades = espRes.records.map((r) => String(r.get('nombre')));
-
     const jurSet = new Set<string>(nodes.map((n) => n.jurisdiction).filter(Boolean));
-    const roleSet = new Set<string>(nodes.map((n) => n.shape_role).filter(Boolean));
 
     return {
       nodes,
       edges,
-      especialidades,
       jurisdicciones: Array.from(jurSet),
-      shapeRoles: Array.from(roleSet),
     };
   } finally {
     await session.close();

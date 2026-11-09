@@ -1,6 +1,4 @@
 import type { APIRoute } from 'astro';
-import fs from 'fs/promises';
-import path from 'path';
 import { ingestLawPDFFromFrontend } from '../../../lib/okf/pdf-ingestor.ts';
 
 export const POST: APIRoute = async ({ request }) => {
@@ -9,12 +7,10 @@ export const POST: APIRoute = async ({ request }) => {
 
     let buffer: Buffer;
     let fileName = 'norma.pdf';
-    let lawNumber = 'Ley / Resolución';
-    let jurisdiction = 'Nacional';
-    let category = 'Legislación_Ingeniería';
-    let shapeRole = 'NormaFondo';
+    let lawNumber = 'Documento Normativo';
+    let jurisdiction = 'General';
+    let category = 'Normativa_Cargada';
     let status = 'Vigente';
-    let especialidades: string[] = ['Civil', 'Industrial', 'Mecanica', 'Electricista'];
 
     if (contentType.includes('multipart/form-data')) {
       const formData = await request.formData();
@@ -33,28 +29,16 @@ export const POST: APIRoute = async ({ request }) => {
       buffer = Buffer.from(arrayBuffer);
       fileName = file.name;
       lawNumber = String(formData.get('lawNumber') || file.name.replace(/\.pdf$/i, '')).trim();
-      jurisdiction = String(formData.get('jurisdiction') || 'Nacional').trim();
-      category = String(formData.get('category') || 'Normativa_Subida').trim();
-      shapeRole = String(formData.get('shapeRole') || 'NormaFondo').trim();
+      jurisdiction = String(formData.get('jurisdiction') || 'General').trim();
+      category = String(formData.get('category') || 'Normativa_Cargada').trim();
       status = String(formData.get('status') || 'Vigente').trim();
-      const espRaw = String(formData.get('especialidades') || '').trim();
-      if (espRaw) {
-        especialidades = espRaw
-          .split(',')
-          .map((s) => s.trim())
-          .filter(Boolean);
-      }
     } else {
       const body = await request.json();
       fileName = body.fileName || 'norma.pdf';
-      lawNumber = body.lawNumber || 'Norma';
-      jurisdiction = body.jurisdiction || 'Nacional';
-      category = body.category || 'General';
-      shapeRole = body.shapeRole || 'NormaFondo';
+      lawNumber = body.lawNumber || 'Documento Normativo';
+      jurisdiction = body.jurisdiction || 'General';
+      category = body.category || 'Normativa_Cargada';
       status = body.status || 'Vigente';
-      if (Array.isArray(body.especialidades) && body.especialidades.length > 0) {
-        especialidades = body.especialidades;
-      }
 
       if (body.fileBase64) {
         buffer = Buffer.from(body.fileBase64, 'base64');
@@ -76,8 +60,6 @@ export const POST: APIRoute = async ({ request }) => {
       lawNumber,
       jurisdiction,
       category,
-      shapeRole,
-      especialidades,
       status,
     });
 

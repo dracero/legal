@@ -8,7 +8,8 @@ const port = String(process.env.PORT || 4321);
 
 async function startDevEnvironment() {
   console.log('======================================================================');
-  console.log(' FIUBA INGENIERÍA LEGAL | ARQUITECTURA NEURO-SIMBÓLICA (OKF+OPA+SHACL)');
+  console.log(' SISTEMA NEURO-SIMBÓLICO DE ANÁLISIS LEGAL Y RAZONAMIENTO DEÓNTICO');
+  console.log(' Google OKF + Neo4j Vectorial + OPA (Rego v1) + W3C SHACL + Gemini 3.6');
   console.log('======================================================================');
 
   // 1. Asegurar contenedor local Neo4j activo

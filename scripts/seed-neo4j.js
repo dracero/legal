@@ -11,8 +11,8 @@ const OKF_DIR = path.resolve(process.env.OKF_CONTENT_DIR || './src/content/okf')
 const uri = process.env.NEO4J_URI || 'bolt://localhost:7688';
 const user = process.env.NEO4J_USER || 'neo4j';
 const password = process.env.NEO4J_PASSWORD || 'password';
-const vectorIndexName = process.env.NEO4J_VECTOR_INDEX || 'fiuba_legal_okf_vector_index';
-const fulltextIndexName = process.env.NEO4J_FULLTEXT_INDEX || 'fiuba_legal_okf_fulltext_index';
+const vectorIndexName = process.env.NEO4J_VECTOR_INDEX || 'legal_normas_vector_index';
+const fulltextIndexName = process.env.NEO4J_FULLTEXT_INDEX || 'legal_normas_fulltext_index';
 const vectorDimensions = Number(process.env.NEO4J_VECTOR_DIMENSIONS || 384);
 const hfModel = process.env.HUGGINGFACE_EMBEDDING_MODEL || 'Xenova/all-MiniLM-L6-v2';
 
@@ -64,9 +64,17 @@ export async function seedDatabase() {
 
   const session = driver.session();
   try {
-    // 1. Asegurar restricciones e índices limpios
+    // 1. Restricciones e índices
     await session.run(
       `CREATE CONSTRAINT legal_okf_id_unique IF NOT EXISTS FOR (n:LegalOKF) REQUIRE n.okf_id IS UNIQUE`
+    );
+
+    await session.run(
+      `CREATE CONSTRAINT concepto_nombre_unique IF NOT EXISTS FOR (c:ConceptoOntologico) REQUIRE c.nombre IS UNIQUE`
+    );
+
+    await session.run(
+      `CREATE CONSTRAINT regla_deontica_id_unique IF NOT EXISTS FOR (r:ReglaDeontica) REQUIRE r.id IS UNIQUE`
     );
 
     await session.run(`
@@ -120,18 +128,18 @@ export async function seedDatabase() {
         okf_id: String(data.okf_id),
         title: String(data.title || data.okf_id),
         node_type: String(data.node_type || 'Articulo'),
-        shape_role: String(data.shape_role || 'NormaFondo'),
         law_number: String(data.law_number || ''),
         article_number: String(data.article_number || ''),
         hierarchy_level: String(data.hierarchy_level || ''),
-        domain: String(data.domain || ''),
+        domain: String(data.domain || 'Derecho_General'),
         category: String(data.category || ''),
-        jurisdiction: String(data.jurisdiction || ''),
-        especialidades_fiuba: Array.isArray(data.especialidades_fiuba) ? data.especialidades_fiuba : [],
+        jurisdiction: String(data.jurisdiction || 'General'),
         status: String(data.status || 'Vigente'),
         last_updated: String(data.last_updated || ''),
         content: content.trim(),
         relations: Array.isArray(data.relations) ? data.relations : [],
+        ontological_entities: Array.isArray(data.ontological_entities) ? data.ontological_entities : [],
+        deontic_rules: Array.isArray(data.deontic_rules) ? data.deontic_rules : [],
       };
 
       const embedding = await computeHfEmbedding(
@@ -146,30 +154,67 @@ export async function seedDatabase() {
         SET n:${safeLabel},
             n.title = $title,
             n.node_type = $node_type,
-            n.shape_role = $shape_role,
             n.law_number = $law_number,
             n.article_number = $article_number,
             n.hierarchy_level = $hierarchy_level,
             n.domain = $domain,
             n.category = $category,
             n.jurisdiction = $jurisdiction,
-            n.especialidades_fiuba = $especialidades_fiuba,
             n.status = $status,
             n.last_updated = $last_updated,
             n.content = $content,
-            n.embedding = $embedding
+            n.embedding = $embedding,
+            n.ontological_entities_json = $ontologicalEntitiesJson,
+            n.deontic_rules_json = $deonticRulesJson
         `,
-        { ...node, embedding }
+        {
+          ...node,
+          embedding,
+          ontologicalEntitiesJson: JSON.stringify(node.ontological_entities),
+          deonticRulesJson: JSON.stringify(node.deontic_rules),
+        }
       );
 
-      for (const esp of node.especialidades_fiuba) {
+      for (const ent of node.ontological_entities) {
+        if (!ent.nombre) continue;
         await session.run(
           `
           MATCH (n:LegalOKF {okf_id: $okf_id})
-          MERGE (e:EspecialidadFIUBA {nombre: $esp})
-          MERGE (n)-[:APLICA_A_ESPECIALIDAD]->(e)
+          MERGE (c:ConceptoOntologico {nombre: $nombre})
+          SET c.categoria = $categoria, c.descripcion = $descripcion
+          MERGE (n)-[:DEFINE_CONCEPTO]->(c)
           `,
-          { okf_id: node.okf_id, esp }
+          {
+            okf_id: node.okf_id,
+            nombre: ent.nombre,
+            categoria: ent.categoria || 'ConceptoJuridico',
+            descripcion: ent.descripcion || '',
+          }
+        );
+      }
+
+      for (const regla of node.deontic_rules) {
+        if (!regla.id) continue;
+        await session.run(
+          `
+          MATCH (n:LegalOKF {okf_id: $okf_id})
+          MERGE (r:ReglaDeontica {id: $reglaId})
+          SET r.modalidad = $modalidad,
+              r.sujeto_normado = $sujeto,
+              r.conducta = $conducta,
+              r.condicion = $condicion,
+              r.consecuencia = $consecuencia
+          MERGE (n)-[:ESTABLECE_DEBER]->(r)
+          `,
+          {
+            okf_id: node.okf_id,
+            reglaId: regla.id,
+            modalidad: regla.modalidad,
+            sujeto: regla.sujeto_normado,
+            conducta: regla.conducta,
+            condicion: regla.condicion,
+            consecuencia: regla.consecuencia,
+          }
         );
       }
 
@@ -179,14 +224,14 @@ export async function seedDatabase() {
     let edgeCount = 0;
     for (const node of parsedNodes) {
       for (const rel of node.relations) {
-        const relType =
+        const sanitizedRelType =
           (rel.type || 'CONCUERDA_CON').replace(/[^A-Z0-9_]/gi, '_').toUpperCase() ||
           'CONCUERDA_CON';
         await session.run(
           `
           MATCH (a:LegalOKF {okf_id: $source})
           MATCH (b:LegalOKF {okf_id: $target})
-          MERGE (a)-[:${relType}]->(b)
+          MERGE (a)-[:${sanitizedRelType}]->(b)
           `,
           { source: node.okf_id, target: rel.target }
         );
@@ -194,18 +239,16 @@ export async function seedDatabase() {
       }
     }
 
-    console.log(
-      `[Neo4j] ✓ Sincronizados ${parsedNodes.length} nodos OKF y ${edgeCount} aristas normativas cargadas por el usuario.`
-    );
+    console.log(`[Neo4j] Sincronización exitosa: ${parsedNodes.length} nodos y ${edgeCount} relaciones.`);
   } finally {
     await session.close();
     await driver.close();
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1]?.endsWith('seed-neo4j.js')) {
   seedDatabase().catch((err) => {
-    console.error('[Neo4j Seed] Error:', err);
+    console.error('[Neo4j Seed Error]:', err);
     process.exit(1);
   });
 }

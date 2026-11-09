@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { GoogleGenAI, Type } from '@google/genai';
 import { APP_CONFIG, getNextGeminiApiKey } from '../config.ts';
-import { evaluarEnServidorOPA, type HechosIngenieria, type PolicyDecision } from '../opa/evaluator.ts';
+import { evaluarEnServidorOPA, type HechosCaso, type PolicyDecision } from '../opa/evaluator.ts';
 import {
   hybridRetrieveAndExpandSubgraph,
   completarNodosFaltantesNeo4j,
@@ -19,113 +19,69 @@ import {
 // Modelo único configurado (sin modelo fallback)
 export const CONFIGURED_GEMINI_MODEL = APP_CONFIG.gemini.model;
 
-// Esquema Zod estricto para Agente 1 (FactExtractorFlow)
-export const HechosIngenieriaSchema = z.object({
-  rama_ingenieria: z.string(),
-  rol_profesional: z.string(),
-  jurisdiccion: z.enum(['CABA', 'PBA', 'Nacional']),
-  esfera_responsabilidad: z.array(z.string()),
-  figuras_juridicas_detectadas: z.array(z.string()),
-  hay_ruina_o_impropiedad_obra: z.boolean(),
-  anios_desde_recepcion: z.number(),
-  subcontratista_sin_matricula_verificada: z.boolean(),
-  clausula_limitacion_o_dispensa: z.boolean(),
-  matricula_jurisdiccion_activa: z.boolean(),
-  modalidad_ejercicio: z.enum([
-    'profesional_liberal',
-    'relacion_de_dependencia',
-    'empresa_constructora_comercial',
-  ]),
-  involucra_higiene_y_seguridad: z.boolean(),
-  existe_publicidad_enganosa: z.boolean(),
-  tarea_tecnica_critica: z.string(),
-  resumen_hechos_tecnicos: z.string(),
+// Esquema Zod estricto para Agente 1 (FactExtractorFlow) - Universal y Agnóstico de Dominio
+export const HechosCasoSchema = z.object({
+  sujetos_involucrados: z.array(z.string()),
+  parte_evaluada: z.string(),
+  rol_o_condicion_juridica: z.string(),
+  conductas_relevantes: z.array(z.string()),
+  omisiones_atribuidas: z.array(z.string()),
+  danos_o_resultados: z.array(z.string()),
+  clausulas_o_defensas_invocadas: z.array(z.string()),
+  resumen_factico: z.string(),
 });
 
-// Structured Output Schema para Gemini (sin parámetros deprecados temperature/top_p)
+// Structured Output Schema para Gemini 3.6 Flash
 const GEMINI_FACT_EXTRACTION_SCHEMA = {
   type: Type.OBJECT,
   properties: {
-    rama_ingenieria: {
-      type: Type.STRING,
-      description: 'Especialidad de ingeniería FIUBA (Civil, Industrial, Mecanica, Electricista, Quimica, Informatica, Electronica, Naval)',
-    },
-    rol_profesional: {
-      type: Type.STRING,
-      description: 'Rol técnico desempeñado por el ingeniero',
-    },
-    jurisdiccion: {
-      type: Type.STRING,
-      enum: ['CABA', 'PBA', 'Nacional'],
-      description: 'Jurisdicción territorial donde se ejecuta la obra o servicio ingenieril',
-    },
-    esfera_responsabilidad: {
+    sujetos_involucrados: {
       type: Type.ARRAY,
       items: { type: Type.STRING },
-      description: 'Esferas de responsabilidad activadas (Civil, Penal, Administrativa, Etica_Profesional, Laboral)',
+      description: 'Partes o personas humanas o jurídicas involucradas en el caso',
     },
-    figuras_juridicas_detectadas: {
+    parte_evaluada: {
+      type: Type.STRING,
+      description: 'Sujeto o entidad cuya conducta o responsabilidad se somete a dictamen',
+    },
+    rol_o_condicion_juridica: {
+      type: Type.STRING,
+      description: 'Calidad o posición jurídica del sujeto evaluado (ej: locador, proveedor, fiduciario, contratista, administrado, etc.)',
+    },
+    conductas_relevantes: {
       type: Type.ARRAY,
       items: { type: Type.STRING },
-      description: 'Figuras jurídicas aplicables (Locación de obra, Ruina, Culpa in vigilando, etc.)',
+      description: 'Acciones positivas realizadas por las partes relevantes para el análisis',
     },
-    hay_ruina_o_impropiedad_obra: {
-      type: Type.BOOLEAN,
-      description: 'True si existe ruina, colapso, falla o impropiedad para el destino (Art. 1273 CCyCN)',
+    omisiones_atribuidas: {
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
+      description: 'Deberes o prestaciones que se imputan no haber sido cumplidos',
     },
-    anios_desde_recepcion: {
-      type: Type.NUMBER,
-      description: 'Años transcurridos desde la entrega o recepción definitiva de la obra',
+    danos_o_resultados: {
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
+      description: 'Perjuicios, efectos o resultados fácticos verificados',
     },
-    subcontratista_sin_matricula_verificada: {
-      type: Type.BOOLEAN,
-      description: 'True si se subcontrató a un tercero sin verificar su matrícula habilitante local',
+    clausulas_o_defensas_invocadas: {
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
+      description: 'Estipulaciones contractuales, defensas, dispensas o exenciones alegadas',
     },
-    clausula_limitacion_o_dispensa: {
-      type: Type.BOOLEAN,
-      description: 'True si se pactaron cláusulas de exclusión o limitación de responsabilidad por ruina/vicios',
-    },
-    matricula_jurisdiccion_activa: {
-      type: Type.BOOLEAN,
-      description: 'True si el ingeniero titular posee matrícula activa en la jurisdicción; False si no está matriculado localmente',
-    },
-    modalidad_ejercicio: {
+    resumen_factico: {
       type: Type.STRING,
-      enum: ['profesional_liberal', 'relacion_de_dependencia', 'empresa_constructora_comercial'],
-    },
-    involucra_higiene_y_seguridad: {
-      type: Type.BOOLEAN,
-      description: 'True si involucra riesgos de trabajo o higiene y seguridad laboral',
-    },
-    existe_publicidad_enganosa: {
-      type: Type.BOOLEAN,
-      description: 'True si media oferta o publicidad al consumidor',
-    },
-    tarea_tecnica_critica: {
-      type: Type.STRING,
-      description: 'Identificador de la tarea crítica analizada',
-    },
-    resumen_hechos_tecnicos: {
-      type: Type.STRING,
-      description: 'Síntesis fáctica concisa del caso',
+      description: 'Síntesis concisa y objetiva de los hechos fácticos',
     },
   },
   required: [
-    'rama_ingenieria',
-    'rol_profesional',
-    'jurisdiccion',
-    'esfera_responsabilidad',
-    'figuras_juridicas_detectadas',
-    'hay_ruina_o_impropiedad_obra',
-    'anios_desde_recepcion',
-    'subcontratista_sin_matricula_verificada',
-    'clausula_limitacion_o_dispensa',
-    'matricula_jurisdiccion_activa',
-    'modalidad_ejercicio',
-    'involucra_higiene_y_seguridad',
-    'existe_publicidad_enganosa',
-    'tarea_tecnica_critica',
-    'resumen_hechos_tecnicos',
+    'sujetos_involucrados',
+    'parte_evaluada',
+    'rol_o_condicion_juridica',
+    'conductas_relevantes',
+    'omisiones_atribuidas',
+    'danos_o_resultados',
+    'clausulas_o_defensas_invocadas',
+    'resumen_factico',
   ],
 };
 
@@ -154,7 +110,6 @@ async function invokeGemini(params: {
     if (params.maxOutputTokens) config.maxOutputTokens = params.maxOutputTokens;
 
     try {
-      // Llamada directa sin parámetros deprecados (temperature/top_p/top_k)
       const response = await client.models.generateContent({
         model: modelName,
         contents: params.contents,
@@ -179,10 +134,17 @@ async function invokeGemini(params: {
       if (isTransient && attempt < 5) {
         const delays = [1500, 3000, 5000, 8000];
         const delay = delays[attempt - 1] || 4000;
-        console.warn(`[Gemini ${modelName}] Reintentando tras alta demanda transitoria en Google (intento ${attempt}/5 en ${delay}ms)...`);
+        console.warn(`[Gemini ${modelName}] Reintentando tras alta demanda transitoria (intento ${attempt}/5 en ${delay}ms)...`);
         await new Promise((r) => setTimeout(r, delay));
         continue;
       }
+
+      if (err.message?.includes('Quota exceeded') || err.message?.includes('RESOURCE_EXHAUSTED')) {
+        throw new Error(
+          `Límite de cuota diaria gratuita alcanzado en Google AI Studio para '${modelName}' (20 solicitudes/día en Free Tier). Puede agregar claves API adicionales separadas por coma en GEMINI_API_KEY en .env o vincular un plan con facturación para solicitudes ilimitadas.`
+        );
+      }
+
       throw err;
     }
   }
@@ -194,19 +156,18 @@ async function invokeGemini(params: {
  * PASO 1: Agente Clasificador de Hechos (FactExtractorFlow)
  */
 export async function extractFactsFromCase(
-  casoPlanteado: string,
-  especialidadIngenieria: string
-): Promise<{ hechos: HechosIngenieria; modelUsed: string }> {
+  casoPlanteado: string
+): Promise<{ hechos: HechosCaso; modelUsed: string }> {
   const text = await invokeGemini({
     systemInstruction:
-      'Extrae las variables fácticas y jurídicas del caso de ingeniería para la cátedra de Ingeniería Legal (FIUBA). Devuelve únicamente el objeto JSON conforme al esquema.',
-    contents: `Especialidad FIUBA seleccionada: ${especialidadIngenieria}.\nCaso planteado: ${casoPlanteado}`,
+      'Eres un Jurista y Auditor Legal experto. Analiza la descripción fáctica del caso planteado y extrae con máxima rigurosidad las variables fácticas, sujetos, conductas, omisiones y defensas invocadas. Devuelve únicamente el objeto JSON conforme al esquema estricto provisto.',
+    contents: `Caso planteado para análisis jurídico:\n${casoPlanteado}`,
     responseMimeType: 'application/json',
     responseSchema: GEMINI_FACT_EXTRACTION_SCHEMA,
   });
 
   const parsedJson = JSON.parse(text);
-  const validated = HechosIngenieriaSchema.parse(parsedJson);
+  const validated = HechosCasoSchema.parse(parsedJson);
   return { hechos: validated, modelUsed: CONFIGURED_GEMINI_MODEL };
 }
 
@@ -219,50 +180,64 @@ export interface CapituloConfig {
 
 export const CAPITULOS_DICTAMEN: CapituloConfig[] = [
   {
-    id: 'Encuadre_Tecnico_Juridico',
+    id: 'Encuadre_Factico_Juridico',
     numeroRomano: 'I',
-    titulo: 'Sección I: Encuadre Técnico-Ingenieril, Incumbencias y Naturaleza Jurídica de la Relación',
-    subtitulo: 'Calificación del contrato de obra/servicios, roles profesionales, matriculación y alcance de título FIUBA',
+    titulo: 'Sección I: Encuadre Fáctico, Sujetos y Calificación Jurídica de las Conductas',
+    subtitulo: 'Identificación de partes, vínculos jurídicos, conductas analizadas y defensas o cláusulas invocadas',
   },
   {
-    id: 'Exegesis_Normativa',
+    id: 'Exegesis_Normativa_Deontica',
     numeroRomano: 'II',
-    titulo: 'Sección II: Exégesis Normativa Exhaustiva y Prelación de Kelsen',
-    subtitulo: 'Análisis artículo por artículo del subgrafo OKF vigente, orden público, caducidad y prescripción',
+    titulo: 'Sección II: Exégesis Normativa y Matriz Deóntica del Documento Cargado',
+    subtitulo: 'Análisis artículo por artículo del subgrafo OKF vigente, obligaciones, prohibiciones y jerarquía de Kelsen',
   },
   {
-    id: 'Responsabilidades',
+    id: 'Subsuncion_Responsabilidades',
     numeroRomano: 'III',
-    titulo: 'Sección III: Análisis de Responsabilidades Concurrentes (Civil, Penal, Administrativa y Ética)',
-    subtitulo: 'Factores de atribución objetivos y subjetivos, culpa in eligendo/in vigilando, tipicidad penal y deontología',
+    titulo: 'Sección III: Subsunción Fáctica: Incumplimientos, Infracciones y Consecuencias Jurídicas',
+    subtitulo: 'Contraste entre los hechos y la matriz deóntica OPA: deberes violados, nulidades y sanciones aplicables',
   },
   {
-    id: 'Variantes_Casuisticas',
+    id: 'Dictamen_Contrafacticos',
     numeroRomano: 'IV',
-    titulo: 'Sección IV: Hipótesis Variadas y Contrafácticos Pedagógicos de Cátedra',
-    subtitulo: 'Inversión de variables deónticas OPA: relación de dependencia vs. autónomo, vicios de suelo/materiales y jurisdicción',
+    titulo: 'Sección IV: Conclusiones, Dictamen Fundado y Escenarios Contrafácticos',
+    subtitulo: 'Resolución jurídica conclusiva anclada en el texto normativo y análisis de hipótesis contrafácticas',
   },
 ];
 
 /**
- * PASO 5: Agente Exégeta / Redactor de Largo Aliento por Sección (DeepLegalExpanderFlow)
+ * PASO 5: Genera el Dictamen Completo en un pase integral optimizado
+ * garantizando coherencia argumental, reduciendo latencia y optimizando el consumo de cuota de Gemini 3.6 Flash.
  */
-export async function generateChapterSection(
-  cap: CapituloConfig,
-  hechos: HechosIngenieria,
+export async function generateFullDictamen(
+  hechos: HechosCaso,
   directivasOPA: PolicyDecision,
   subgrafoOKF: OKFNode[]
-): Promise<string> {
-  const text = await invokeGemini({
-    systemInstruction: `Actúa como Profesor Titular de Ingeniería Legal y Ejercicio Profesional (FIUBA).
-Desarrolla de forma exhaustiva, doctrinal y extensa el capítulo solicitado: ${cap.titulo} (${cap.subtitulo}).
+): Promise<Array<{ id: string; titulo: string; markdown: string }>> {
+  const systemPrompt = `Actúa como Jurista y Auditor Legal experto.
+Redacta el Dictamen Jurídico exhaustivo, riguroso y doctrinal estructurado estrictamente en las siguientes cuatro secciones con encabezados Markdown nivel 2:
+
+## Sección I: Encuadre Fáctico, Sujetos y Calificación Jurídica de las Conductas
+(Identificación precisa de las partes, sus roles normados, conductas analizadas y defensas/cláusulas invocadas).
+
+## Sección II: Exégesis Normativa y Matriz Deóntica del Documento Cargado
+(Análisis artículo por artículo del subgrafo OKF vigente, deberes, prohibiciones, permisiones y prelación de Kelsen).
+
+## Sección III: Subsunción Fáctica: Incumplimientos, Infracciones y Consecuencias Jurídicas
+(Contraste riguroso entre las conductas y la matriz deóntica OPA: deberes incumplidos, prohibiciones vulneradas y nulidades aplicables).
+
+## Sección IV: Conclusiones, Dictamen Fundado y Escenarios Contrafácticos
+(Resolución jurídica conclusiva fundada exclusivamente en el texto legal, hipótesis contrafácticas de cumplimiento e implicancias prácticas).
+
 RESTRICCIÓN SIMBÓLICA ESTRICTA:
-1. El análisis debe basarse ESTRICTA Y EXCLUSIVAMENTE en los nodos OKF provistos en 'nodosOKFVigentes' (que provienen de las normas cargadas por el usuario). No menciones ni inventes normas fuera de este conjunto.
-2. Debes obedecer rigurosamente las directivas deterministas de OPA adjuntas.
+1. El análisis debe basarse ESTRICTA Y EXCLUSIVAMENTE en los nodos OKF provistos en 'nodosOKFVigentes'. No menciones ni inventes normas fuera de este conjunto.
+2. Debes obedecer rigurosamente las directivas deterministas de OPA adjuntas (deberes, prohibiciones, nulidades y prelación).
 3. Cita obligatoriamente cada norma utilizada mediante su identificador [okf_id] entre corchetes (ejemplo: [${subgrafoOKF[0]?.okf_id || 'norma-id'}]).
-4. Redacta en Markdown académico profundo y riguroso.`,
+4. Redacta en Markdown académico profundo, riguroso y analítico.`;
+
+  const text = await invokeGemini({
+    systemInstruction: systemPrompt,
     contents: JSON.stringify({
-      capituloActual: cap,
       hechosDelCaso: hechos,
       falloDeterministaOPA: directivasOPA,
       nodosOKFVigentes: subgrafoOKF.map((n) => ({
@@ -271,14 +246,44 @@ RESTRICCIÓN SIMBÓLICA ESTRICTA:
         law_number: n.law_number,
         article_number: n.article_number,
         jurisdiction: n.jurisdiction,
-        shape_role: n.shape_role,
         content: n.content,
+        ontological_entities: n.ontological_entities || [],
+        deontic_rules: n.deontic_rules || [],
       })),
     }),
     maxOutputTokens: APP_CONFIG.gemini.maxOutputTokens,
   });
 
-  return text;
+  // Dividir el dictamen en las 4 secciones según los encabezados ## Sección
+  const sectionRegex = /##\s*Secci[oó]n\s*([I|V|X]+)[^\n]*\n([\s\S]*?)(?=(?:##\s*Secci[oó]n\s*[I|V|X]+)|$)/gi;
+  const matches = Array.from(text.matchAll(sectionRegex));
+
+  const results: Array<{ id: string; titulo: string; markdown: string }> = [];
+
+  if (matches.length >= 4) {
+    for (let i = 0; i < CAPITULOS_DICTAMEN.length; i++) {
+      const cap = CAPITULOS_DICTAMEN[i];
+      const match = matches[i];
+      const body = match ? match[0].trim() : `## ${cap.titulo}\n\n(Sección desarrollada)`;
+      results.push({ id: cap.id, titulo: cap.titulo, markdown: body });
+    }
+  } else {
+    // Si el formateo varió levemente, particionar proporcionalmente o asignar la respuesta completa
+    results.push({
+      id: CAPITULOS_DICTAMEN[0].id,
+      titulo: CAPITULOS_DICTAMEN[0].titulo,
+      markdown: text,
+    });
+    for (let i = 1; i < CAPITULOS_DICTAMEN.length; i++) {
+      results.push({
+        id: CAPITULOS_DICTAMEN[i].id,
+        titulo: CAPITULOS_DICTAMEN[i].titulo,
+        markdown: `*(Contenido integrado en la resolución general)*`,
+      });
+    }
+  }
+
+  return results;
 }
 
 export interface PipelineStepEvent {
@@ -295,10 +300,9 @@ export interface PipelineStepEvent {
  */
 export async function executeNeuroSymbolicPipeline(
   casoPlanteado: string,
-  especialidadIngenieria: string,
   onEvent?: (event: PipelineStepEvent) => void
 ): Promise<{
-  hechos: HechosIngenieria;
+  hechos: HechosCaso;
   modelUsed: string;
   directivasOPA: PolicyDecision;
   subgrafoNodes: OKFNode[];
@@ -318,7 +322,7 @@ export async function executeNeuroSymbolicPipeline(
   const { nodes: catalogNodes } = await getAllCatalogOKFNodes();
   if (catalogNodes.length === 0) {
     throw new Error(
-      'No se han subido leyes o resoluciones en PDF. Por favor cargue al menos un documento normativo en PDF desde el panel superior para analizar el caso (el sistema analiza estricta y exclusivamente las normas que usted ingrese).'
+      'No se han subido documentos normativos en PDF. Por favor cargue al menos un documento legal en PDF desde el panel superior para analizar el caso (el sistema analiza estricta y exclusivamente las normas que usted ingrese).'
     );
   }
 
@@ -326,19 +330,19 @@ export async function executeNeuroSymbolicPipeline(
   emit({
     step: 1,
     stageId: 'FactExtractorFlow',
-    title: '1. Agente Clasificador de Hechos (Genkit + Zod Schema)',
+    title: '1. Agente Clasificador de Hechos (Esquema Zod Estricto)',
     status: 'running',
-    detail: `Extrayendo variables fácticas y jurídicas con esquema estricto Zod (${CONFIGURED_GEMINI_MODEL})...`,
+    detail: `Extrayendo variables fácticas, sujetos y conductas con esquema Zod (${CONFIGURED_GEMINI_MODEL})...`,
   });
 
-  const { hechos, modelUsed } = await extractFactsFromCase(casoPlanteado, especialidadIngenieria);
+  const { hechos, modelUsed } = await extractFactsFromCase(casoPlanteado);
 
   emit({
     step: 1,
     stageId: 'FactExtractorFlow',
-    title: '1. Agente Clasificador de Hechos (Genkit + Zod Schema)',
+    title: '1. Agente Clasificador de Hechos (Esquema Zod Estricto)',
     status: 'completed',
-    detail: `Rama: ${hechos.rama_ingenieria} | Jurisdicción: ${hechos.jurisdiccion} | Figuras detectadas: ${hechos.figuras_juridicas_detectadas.length}`,
+    detail: `Parte Evaluada: ${hechos.parte_evaluada} (${hechos.rol_o_condicion_juridica}) | Conductas: ${hechos.conductas_relevantes.length} | Omisiones: ${hechos.omisiones_atribuidas.length}`,
     payload: { hechos, modelUsed },
   });
 
@@ -348,7 +352,7 @@ export async function executeNeuroSymbolicPipeline(
     stageId: 'OPAPolicyGate',
     title: '2. Motor Deóntico de Políticas (OPA / Rego v1)',
     status: 'running',
-    detail: 'Evaluando incumbencias, colegiación, orden público y prelación de Kelsen en OPA sobre las normas cargadas...',
+    detail: 'Evaluando matriz deóntica (obligaciones, prohibiciones, nulidades y Kelsen) en OPA sobre la norma cargada...',
   });
 
   const directivasOPA = await evaluarEnServidorOPA(hechos, catalogNodes);
@@ -358,7 +362,7 @@ export async function executeNeuroSymbolicPipeline(
     stageId: 'OPAPolicyGate',
     title: '2. Motor Deóntico de Políticas (OPA / Rego v1)',
     status: 'completed',
-    detail: `Motor ${directivasOPA.engine} (${directivasOPA.evaluation_time_ms}ms) -> ${directivasOPA.nodos_okf_obligatorios.length} nodos OKF obligatorios.`,
+    detail: `Motor ${directivasOPA.engine} (${directivasOPA.evaluation_time_ms}ms) -> ${directivasOPA.nodos_okf_obligatorios.length} nodos OKF obligatorios activados.`,
     payload: directivasOPA,
   });
 
@@ -374,8 +378,6 @@ export async function executeNeuroSymbolicPipeline(
   const queryCombined = `${casoPlanteado} ${directivasOPA.terminos_busqueda_obligatorios.join(' ')}`;
   const { nodes: initialNodes, edges: initialEdges } = await hybridRetrieveAndExpandSubgraph({
     queryText: queryCombined,
-    especialidad: hechos.rama_ingenieria,
-    jurisdiccion: hechos.jurisdiccion,
     obligatoriosOPA: directivasOPA.nodos_okf_obligatorios,
     limit: 12,
   });
@@ -395,7 +397,7 @@ export async function executeNeuroSymbolicPipeline(
     stageId: 'SHACLValidatorNode',
     title: '4. Validador Ontológico Estructural (W3C SHACL)',
     status: 'running',
-    detail: 'Validando topología RDF del subgrafo contra fiuba:LegalAnalysisShape...',
+    detail: 'Validando topología RDF del subgrafo contra legal:LegalAnalysisShape...',
   });
 
   const reporteSHACLInicial = await validarGrafoConSHACL(initialNodes, directivasOPA);
@@ -407,9 +409,7 @@ export async function executeNeuroSymbolicPipeline(
     reparacionSHACLEjecutada = true;
     finalNodes = await completarNodosFaltantesNeo4j(
       initialNodes,
-      reporteSHACLInicial.missingShapeRoles,
-      reporteSHACLInicial.missingOkfIds,
-      hechos.jurisdiccion
+      reporteSHACLInicial.missingOkfIds
     );
     reporteSHACLFinal = await validarGrafoConSHACL(finalNodes, directivasOPA);
   }
@@ -431,31 +431,28 @@ export async function executeNeuroSymbolicPipeline(
   });
 
   // PASO 5: Agente Exégeta / Redactor de Largo Aliento (DeepLegalExpanderFlow)
-  const seccionesRedactadas: Array<{ id: string; titulo: string; markdown: string }> = [];
+  emit({
+    step: 5,
+    stageId: 'DeepLegalExpanderFlow',
+    title: '5. Agente Exégeta de Largo Aliento (Pase Integral I-IV)',
+    status: 'running',
+    detail: `Redactando dictamen exhaustivo en 4 secciones con ${modelUsed}...`,
+    payload: { currentChapterIndex: 0, chapterId: 'Dictamen_Completo' },
+  });
 
-  for (let i = 0; i < CAPITULOS_DICTAMEN.length; i++) {
-    const cap = CAPITULOS_DICTAMEN[i];
+  const seccionesRedactadas = await generateFullDictamen(hechos, directivasOPA, finalNodes);
+
+  for (let i = 0; i < seccionesRedactadas.length; i++) {
+    const sec = seccionesRedactadas[i];
     emit({
       step: 5,
       stageId: 'DeepLegalExpanderFlow',
-      title: `5. Agente Exégeta de Largo Aliento (${cap.numeroRomano}/IV)`,
-      status: 'running',
-      detail: `Redactando ${cap.titulo} con ${modelUsed}...`,
-      payload: { currentChapterIndex: i, chapterId: cap.id },
-    });
-
-    const markdown = await generateChapterSection(cap, hechos, directivasOPA, finalNodes);
-    seccionesRedactadas.push({ id: cap.id, titulo: cap.titulo, markdown });
-
-    emit({
-      step: 5,
-      stageId: 'DeepLegalExpanderFlow',
-      title: `5. Agente Exégeta de Largo Aliento (${cap.numeroRomano}/IV)`,
+      title: `5. Agente Exégeta de Largo Aliento (${i + 1}/IV)`,
       status: 'completed',
-      detail: `Capítulo ${cap.numeroRomano} completado (${markdown.length} caracteres).`,
+      detail: `Sección ${i + 1} completada (${sec.markdown.length} caracteres).`,
       payload: {
-        chapterCompleted: { id: cap.id, titulo: cap.titulo, markdown },
-        progress: `${i + 1}/${CAPITULOS_DICTAMEN.length}`,
+        chapterCompleted: sec,
+        progress: `${i + 1}/${seccionesRedactadas.length}`,
       },
     });
   }
@@ -468,7 +465,7 @@ export async function executeNeuroSymbolicPipeline(
     stageId: 'EpistemicAuditorNode',
     title: '6. Auditor Epistémico Post-Generación (SHACL + OPA)',
     status: 'running',
-    detail: 'Verificando trazabilidad de citas contra fiuba:EpistemicAuditShape y el subgrafo Neo4j...',
+    detail: 'Verificando trazabilidad de citas contra legal:EpistemicAuditShape y el subgrafo Neo4j...',
   });
 
   const auditoriaEpistemica = await auditarDictamenEpistemico(

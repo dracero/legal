@@ -1,81 +1,66 @@
 @prefix sh: <http://www.w3.org/ns/shacl#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
-@prefix fiuba: <http://fiuba.uba.ar/ontologia/legal#> .
+@prefix legal: <http://antigravity.ai/ontologia/legal#> .
 
-# 1. Shape Pre-Ingesta para Nodos Atómicos OKF extraídos de PDF
-fiuba:OKFNodeShape
+# 1. Shape Pre-Ingesta para Nodos Atómicos OKF extraídos del Documento PDF
+legal:OKFNodeShape
     a sh:NodeShape ;
-    sh:targetClass fiuba:OKFEntry ;
+    sh:targetClass legal:OKFEntry ;
     sh:property [
-        sh:path fiuba:okf_id ;
+        sh:path legal:okf_id ;
         sh:datatype xsd:string ;
         sh:minCount 1 ;
-        sh:minLength 4 ;
-        sh:message "Todo nodo OKF debe poseer un identificador atómico único (fiuba:okf_id)." ;
+        sh:minLength 3 ;
+        sh:message "Todo nodo normativo debe poseer un identificador atómico único (legal:okf_id)." ;
     ] ;
     sh:property [
-        sh:path fiuba:title ;
+        sh:path legal:title ;
         sh:datatype xsd:string ;
         sh:minCount 1 ;
-        sh:minLength 5 ;
-        sh:message "Todo nodo OKF debe poseer un título descriptivo (fiuba:title)." ;
+        sh:minLength 3 ;
+        sh:message "Todo nodo normativo debe poseer un título o encabezado descriptivo (legal:title)." ;
     ] ;
     sh:property [
-        sh:path fiuba:jurisdiction ;
-        sh:datatype xsd:string ;
-        sh:minCount 1 ;
-        sh:in ( "Nacional" "CABA" "PBA" ) ;
-        sh:message "La jurisdicción debe ser 'Nacional', 'CABA' o 'PBA'." ;
-    ] ;
-    sh:property [
-        sh:path fiuba:status ;
+        sh:path legal:status ;
         sh:datatype xsd:string ;
         sh:minCount 1 ;
         sh:hasValue "Vigente" ;
-        sh:message "Pre-ingesta rechazada por SHACL: solo se admiten normas con estado 'Vigente' en el índice activo." ;
+        sh:message "Pre-ingesta rechazada: solo se admiten disposiciones normativas en estado 'Vigente'." ;
     ] ;
     sh:property [
-        sh:path fiuba:shape_role ;
+        sh:path legal:content ;
         sh:datatype xsd:string ;
         sh:minCount 1 ;
-        sh:in ( "NormaFondo" "PrincipioDeResponsabilidad" "MarcoEjercicioProfesional" "EticaProfesional" ) ;
-        sh:message "Todo nodo OKF debe clasificar su rol ontológico (NormaFondo, PrincipioDeResponsabilidad, MarcoEjercicioProfesional o EticaProfesional)." ;
-    ] ;
-    sh:property [
-        sh:path fiuba:especialidad ;
-        sh:datatype xsd:string ;
-        sh:minCount 1 ;
-        sh:message "El nodo OKF debe vincularse al menos a una especialidad de Ingeniería de la FIUBA." ;
+        sh:minLength 10 ;
+        sh:message "El nodo debe contener el cuerpo textual de la norma o disposición." ;
     ] .
 
 # 2. Shape Pre-Generación para el Esqueleto Argumental del Dictamen Legal
-# Requiere que el subgrafo conecte con al menos una norma vigente cargada por el usuario
-# y que no falte ningún nodo obligatorio dictado por OPA
-fiuba:LegalAnalysisShape
+legal:LegalAnalysisShape
     a sh:NodeShape ;
-    sh:targetClass fiuba:DictamenLegal ;
+    sh:targetClass legal:DictamenLegal ;
     sh:property [
-        sh:path fiuba:hasNormaVigente ;
+        sh:path legal:hasNormaVigente ;
         sh:minCount 1 ;
-        sh:message "NormaVigente|El subgrafo debe conectar el hecho ingenieril con al menos una norma vigente cargada por el usuario en Neo4j." ;
+        sh:message "NormaVigente|El subgrafo debe conectar los hechos del caso con al menos una norma vigente extraída del documento cargado." ;
     ] ;
     sh:property [
-        sh:path fiuba:missingRequiredOPANode ;
+        sh:path legal:missingRequiredOPANode ;
         sh:maxCount 0 ;
-        sh:message "OPARequired|El subgrafo debe contener todos los nodos obligatorios exigidos por el fallo deóntico de OPA." ;
+        sh:message "OPARequired|El subgrafo debe contener todos los nodos obligatorios determinados por el motor deóntico OPA." ;
     ] .
 
 # 3. Shape Post-Generación para Auditoría Epistémica de Trazabilidad de Citas
-fiuba:EpistemicAuditShape
+legal:EpistemicAuditShape
     a sh:NodeShape ;
-    sh:targetClass fiuba:AuditoriaDictamen ;
+    sh:targetClass legal:AuditoriaDictamen ;
     sh:property [
-        sh:path fiuba:hasVerifiedCitation ;
+        sh:path legal:hasVerifiedCitation ;
         sh:minCount 1 ;
-        sh:message "El dictamen redactado debe contener citas trazables a nodos existentes en el subgrafo de Neo4j." ;
+        sh:message "El dictamen redactado debe contener citas verificadas a artículos del documento cargado en Neo4j." ;
     ] ;
     sh:property [
-        sh:path fiuba:hasHallucinatedCitation ;
+        sh:path legal:hasHallucinatedCitation ;
         sh:maxCount 0 ;
-        sh:message "Violación Epistémica: Se detectaron citas a identificadores OKF inexistentes en el subgrafo validado de Neo4j." ;
+        sh:message "Violación Epistémica: Se detectaron citas normativas no pertenecientes al documento cargado." ;
     ] .

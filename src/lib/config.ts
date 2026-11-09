@@ -68,19 +68,19 @@ export const APP_CONFIG = {
     user: process.env.NEO4J_USER || 'neo4j',
     password: process.env.NEO4J_PASSWORD || 'password',
     database: process.env.NEO4J_DATABASE || 'neo4j',
-    vectorIndexName: process.env.NEO4J_VECTOR_INDEX || 'fiuba_legal_okf_vector_index',
-    fulltextIndexName: process.env.NEO4J_FULLTEXT_INDEX || 'fiuba_legal_okf_fulltext_index',
+    vectorIndexName: process.env.NEO4J_VECTOR_INDEX || 'legal_normas_vector_index',
+    fulltextIndexName: process.env.NEO4J_FULLTEXT_INDEX || 'legal_normas_fulltext_index',
     vectorDimensions: Number(process.env.NEO4J_VECTOR_DIMENSIONS || 384),
   },
   opa: {
     binPath: resolveOpaBinary(),
     serverUrl: process.env.OPA_SERVER_URL || '',
     policyDir: path.resolve(process.env.OPA_POLICY_DIR || './src/lib/opa/policies'),
-    queryPath: process.env.OPA_QUERY_PATH || 'data.fiuba.legal.dictamen',
+    queryPath: process.env.OPA_QUERY_PATH || 'data.legal.deontico',
   },
   shacl: {
     shapesPath: path.resolve(process.env.SHACL_SHAPES_PATH || './src/lib/shacl/shapes.ttl'),
-    ontologyNamespace: process.env.SHACL_ONTOLOGY_NS || 'http://fiuba.uba.ar/ontologia/legal#',
+    ontologyNamespace: process.env.SHACL_ONTOLOGY_NS || 'http://antigravity.ai/ontologia/legal#',
   },
   okf: {
     contentDir: path.resolve(process.env.OKF_CONTENT_DIR || './src/content/okf'),

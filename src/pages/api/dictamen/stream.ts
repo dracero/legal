@@ -5,11 +5,10 @@ export const POST: APIRoute = async ({ request }) => {
   try {
     const body = await request.json();
     const casoPlanteado = String(body.casoPlanteado || '').trim();
-    const especialidadIngenieria = String(body.especialidadIngenieria || 'Civil').trim();
 
     if (!casoPlanteado || casoPlanteado.length < 10) {
       return new Response(
-        JSON.stringify({ error: 'Por favor describa el caso de ingeniería con al menos 10 caracteres.' }),
+        JSON.stringify({ error: 'Por favor describa el caso o situación jurídica con al menos 10 caracteres.' }),
         { status: 400, headers: { 'Content-Type': 'application/json' } }
       );
     }
@@ -26,7 +25,6 @@ export const POST: APIRoute = async ({ request }) => {
         try {
           const result = await executeNeuroSymbolicPipeline(
             casoPlanteado,
-            especialidadIngenieria,
             (stepEvent) => {
               sendEvent('step', stepEvent);
             }
@@ -57,4 +55,3 @@ export const POST: APIRoute = async ({ request }) => {
     });
   }
 };
-

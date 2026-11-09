@@ -12,25 +12,25 @@ try {
 }
 ---
 
-<Layout title="FIUBA Ingeniería Legal | Arquitectura Neuro-Simbólica (OKF + Neo4j + OPA + SHACL + Gemini)">
+<Layout title="Sistema Neuro-Simbólico de Análisis Legal y Razonamiento Deóntico | OKF + Neo4j + OPA + SHACL + Gemini 3.6 Flash">
   <!-- Header Institucional -->
   <header class="sticky top-0 z-30 border-b border-slate-800/80 bg-[#0b1120]/90 backdrop-blur-md">
     <div class="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-4 px-6 py-3.5">
       <div class="flex items-center gap-3.5">
         <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-indigo-600 font-bold text-white shadow-lg shadow-sky-500/20">
-          FIUBA
+          LEX
         </div>
         <div>
           <div class="flex items-center gap-2">
             <h1 class="text-base font-bold tracking-tight text-white sm:text-lg">
-              Sistema Neuro-Simbólico de Ingeniería Legal y Ejercicio Profesional
+              Sistema Neuro-Simbólico de Análisis Legal y Razonamiento Deóntico
             </h1>
             <span class="rounded-full border border-sky-500/40 bg-sky-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-sky-300">
               v2026.11
             </span>
           </div>
           <p class="text-xs text-slate-400">
-            Cátedra Todas las Especialidades FIUBA • Google OKF + Neo4j Vectorial (Hugging Face {APP_CONFIG.huggingface.model}) + OPA (Rego v1) + W3C SHACL + Gemini {CONFIGURED_GEMINI_MODEL}
+            Análisis Dinámico de Documentos • Google OKF + Neo4j Vectorial ({APP_CONFIG.huggingface.model}) + OPA Deóntico (Rego v1) + W3C SHACL + Gemini {CONFIGURED_GEMINI_MODEL}
           </p>
         </div>
       </div>
@@ -43,8 +43,19 @@ try {
         </span>
         <span class="flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-emerald-300">
           <span class="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
-          Neo4j 5.20 (:7688) • <strong id="header-node-count">{initialCatalog.nodes.length}</strong> Nodos OKF
+          Neo4j (:7688) • <strong id="header-node-count">{initialCatalog.nodes.length}</strong> Nodos OKF
         </span>
+        <button
+          id="btn-clear-catalog"
+          type="button"
+          title="Eliminar todos los documentos cargados y reiniciar la base a 0 nodos"
+          class="flex items-center gap-1 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2 py-1 text-[11px] font-medium text-rose-300 transition hover:bg-rose-500/20 cursor-pointer"
+        >
+          <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+          Vaciar Base
+        </button>
         <span class="flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-amber-300">
           <span class="h-2 w-2 rounded-full bg-amber-400"></span>
           OPA Rego v1.22
@@ -61,14 +72,14 @@ try {
           <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
           </svg>
-          Subir Ley en PDF (OKF + SHACL)
+          Cargar Documento Normativo (PDF)
         </button>
       </div>
     </div>
   </header>
 
   <main class="mx-auto max-w-[1600px] px-4 py-5 sm:px-6">
-    <!-- PANEL DESPLEGABLE DE INGESTA DE LEYES POR PDF (Pre-Validada con SHACL -> OKF -> Neo4j) -->
+    <!-- PANEL DE INGESTA DE DOCUMENTOS NORMATIVOS POR PDF -->
     <section
       id="pdf-upload-section"
       class="mb-6 rounded-2xl border border-sky-500/30 bg-gradient-to-b from-slate-900/95 to-slate-950/95 p-5 shadow-xl shadow-sky-950/20"
@@ -77,15 +88,15 @@ try {
         <div>
           <h2 class="flex items-center gap-2 text-base font-bold text-white">
             <span class="flex h-6 w-6 items-center justify-center rounded-md bg-sky-500/20 text-xs text-sky-400">PDF</span>
-            Ingesta Atómica de Leyes, Decretos e Incumbencias desde PDF (Estándar Google OKF + Compuerta Pre-Ingesta SHACL)
+            Ingesta Dinámica de Normas (Extracción Ontológica y Deóntica + Validación Pre-Ingesta SHACL + Neo4j)
           </h2>
           <p class="text-xs text-slate-400">
-            En lugar de fragmentar PDFs a ciegas (chunking), el parser desglosa cada Artículo con todos sus incisos como una unidad OKF atómica, la valida contra <code>fiuba:OKFNodeShape</code> en SHACL e indexa sus vectores y aristas en Neo4j.
+            El sistema desglosa el documento en artículos o cláusulas atómicas OKF, extrae la <strong>Ontología</strong> (conceptos, sujetos) y la <strong>Lógica Deóntica</strong> (obligaciones, prohibiciones, permisiones y sanciones) con Gemini 3.6 Flash, valida mediante SHACL e indexa en Neo4j.
           </p>
         </div>
         <div class="flex items-center gap-2">
           <span class="rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-1.5 text-xs text-slate-300">
-            Ingesta Dinámica de PDF del Usuario
+            100% Dinámico: Basado en el Documento Cargado
           </span>
         </div>
       </div>
@@ -94,7 +105,7 @@ try {
         <!-- Selector de archivo PDF -->
         <div class="lg:col-span-4">
           <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
-            Archivo PDF de la Norma Legal
+            Archivo PDF de la Norma o Contrato
           </label>
           <label
             for="pdf-file-input"
@@ -104,63 +115,47 @@ try {
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
             <span id="pdf-file-label" class="text-xs font-medium text-slate-200">
-              Seleccionar o arrastrar PDF de Ley / Resolución (.pdf)
+              Seleccionar o arrastrar PDF (.pdf)
             </span>
-            <span class="mt-0.5 text-[11px] text-slate-400">Desglose automático por Artículo + Incisos</span>
+            <span class="mt-0.5 text-[11px] text-slate-400">Extracción automática de artículos, ontología y deóntica</span>
             <input id="pdf-file-input" name="file" type="file" accept=".pdf,application/pdf" class="hidden" />
           </label>
         </div>
 
-        <!-- Metadatos Ontológicos OKF -->
-        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:col-span-6">
+        <!-- Metadatos de la Norma -->
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:col-span-6">
           <div>
-            <label class="block text-xs font-medium text-slate-300 mb-1">Cuerpo Normativo / Número de Ley</label>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Título o Denominación de la Norma</label>
             <input
               id="pdf-law-number"
               name="lawNumber"
               type="text"
-              placeholder="Ej: Decreto 911/96 o Ley 13.660"
+              placeholder="Ej: Ley 24.240 de Defensa del Consumidor"
               required
-              value="Decreto 911/96 (Seguridad en la Construcción)"
               class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-white focus:border-sky-500 focus:outline-none"
             />
           </div>
 
           <div>
-            <label class="block text-xs font-medium text-slate-300 mb-1">Jurisdicción Territorial (SHACL)</label>
-            <select
+            <label class="block text-xs font-medium text-slate-300 mb-1">Ámbito / Jurisdicción</label>
+            <input
               id="pdf-jurisdiction"
               name="jurisdiction"
+              type="text"
+              placeholder="Ej: Nacional, Provincial, General"
+              value="General"
               class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-white focus:border-sky-500 focus:outline-none"
-            >
-              <option value="Nacional">Nacional (Argentina / Federal)</option>
-              <option value="CABA">CABA (Ciudad Autónoma de Bs. As.)</option>
-              <option value="PBA">PBA (Provincia de Buenos Aires)</option>
-            </select>
+            />
           </div>
 
           <div>
-            <label class="block text-xs font-medium text-slate-300 mb-1">Rol Ontológico (Shape SHACL)</label>
-            <select
-              id="pdf-shape-role"
-              name="shapeRole"
-              class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-white focus:border-sky-500 focus:outline-none"
-            >
-              <option value="NormaFondo">NormaFondo (CCyCN / HyS / LCT)</option>
-              <option value="PrincipioDeResponsabilidad">PrincipioDeResponsabilidad (Civil / Penal)</option>
-              <option value="MarcoEjercicioProfesional">MarcoEjercicioProfesional (Colegios / Incumbencias)</option>
-              <option value="EticaProfesional">EticaProfesional (Código de Ética)</option>
-            </select>
-          </div>
-
-          <div>
-            <label class="block text-xs font-medium text-slate-300 mb-1">Estado de Vigencia (Filtro SHACL)</label>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Estado de Vigencia (SHACL)</label>
             <select
               id="pdf-status"
               name="status"
               class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-white focus:border-sky-500 focus:outline-none"
             >
-              <option value="Vigente">Vigente (Admitida en Índice Activo)</option>
+              <option value="Vigente">Vigente (Admitida en el Grafo)</option>
               <option value="Historica">Derogada / Histórica (Rechazada por SHACL)</option>
             </select>
           </div>
@@ -168,19 +163,13 @@ try {
 
         <!-- Botón de acción -->
         <div class="flex flex-col justify-end lg:col-span-2">
-          <input
-            id="pdf-especialidades"
-            name="especialidades"
-            type="hidden"
-            value="Civil,Industrial,Mecanica,Electricista,Quimica,Informatica,Electronica"
-          />
           <button
             id="btn-submit-pdf"
             type="submit"
             class="flex h-20 w-full flex-col items-center justify-center rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-sky-600/20 transition hover:from-sky-500 hover:to-indigo-500 cursor-pointer"
           >
             <span>Procesar PDF a OKF</span>
-            <span class="mt-0.5 text-[10px] font-normal text-sky-100">Validar SHACL + Ingestar Neo4j</span>
+            <span class="mt-0.5 text-[10px] font-normal text-sky-100">Extraer Deóntica + Neo4j</span>
           </button>
         </div>
       </form>
@@ -189,7 +178,7 @@ try {
       <div id="pdf-upload-result" class="mt-3 hidden rounded-xl border border-slate-800 bg-slate-950/90 p-3.5 text-xs"></div>
     </section>
 
-    <!-- BANNER DE ESTADO VACÍO: Solo si no hay leyes cargadas -->
+    <!-- BANNER DE ESTADO VACÍO -->
     <div id="empty-catalog-banner" class:list={['mb-6 rounded-2xl border border-sky-500/30 bg-sky-950/25 p-5 shadow-lg', initialCatalog.nodes.length > 0 && 'hidden']}>
       <div class="flex items-start gap-4">
         <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-500/20 text-sky-400">
@@ -198,77 +187,50 @@ try {
           </svg>
         </div>
         <div>
-          <h3 class="text-sm font-bold text-white">Base de Conocimiento Vacía: Ingesta de Leyes en PDF Requerida</h3>
+          <h3 class="text-sm font-bold text-white">Base de Conocimiento Vacía: Carga de Norma Requerida</h3>
           <p class="mt-1 text-xs text-slate-300">
-            El sistema opera en modo <strong>estricto</strong>: analiza <strong>únicamente las normas que usted cargue</strong>. Suba un archivo PDF legal desde el panel superior (por ejemplo, leyes de incumbencias, decretos de higiene y seguridad, o artículos normativos) para poblar el subgrafo en Neo4j y habilitar el pipeline determinista.
+            El sistema opera en modo <strong>estricto</strong>: analiza <strong>únicamente las normas que usted cargue</strong>. Suba un archivo PDF legal desde el panel superior para poblar el subgrafo en Neo4j, extraer su matriz deóntica y habilitar el pipeline de análisis.
           </p>
         </div>
       </div>
     </div>
 
-    <!-- GRILLA PRINCIPAL: IZQUIERDA (CASO + PIPELINE + DICTAMEN EXTENSO) | DERECHA (GRAFO NEO4J + OPA + SHACL) -->
+    <!-- GRILLA PRINCIPAL: IZQUIERDA (CASO + PIPELINE + DICTAMEN) | DERECHA (GRAFO NEO4J + OPA + SHACL) -->
     <div class="grid grid-cols-1 gap-6 xl:grid-cols-12">
       <!-- COLUMNA IZQUIERDA (7 cols): Consulta de Caso, Pipeline de 6 Agentes y Dictamen Extenso -->
       <div class="space-y-6 xl:col-span-7">
-        <!-- TARJETA DE ENTRADA DEL CASO DE INGENIERÍA -->
+        <!-- TARJETA DE ENTRADA DEL CASO -->
         <div class="rounded-2xl border border-slate-800 bg-slate-900/75 p-5 shadow-lg">
           <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 class="text-sm font-bold uppercase tracking-wider text-sky-400">
-              Planteo del Caso Clínico / Pericial de Ingeniería (FIUBA)
+              Planteo del Caso Fáctico / Situación Jurídica a Analizar
             </h2>
           </div>
 
           <form id="dictamen-form" class="space-y-4">
-            <div class="grid grid-cols-1 gap-4 sm:grid-cols-12">
-              <div class="sm:col-span-4">
-                <label class="block text-xs font-semibold text-slate-300 mb-1">
-                  Especialidad FIUBA del Profesional
-                </label>
-                <select
-                  id="select-especialidad"
-                  class="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-xs font-medium text-white focus:border-sky-500 focus:outline-none"
-                >
-                  <option value="Civil">Ingeniería Civil</option>
-                  <option value="Industrial">Ingeniería Industrial</option>
-                  <option value="Informatica">Ingeniería en Informática</option>
-                  <option value="Electronica">Ingeniería Electrónica</option>
-                  <option value="Mecanica">Ingeniería Mecánica</option>
-                  <option value="Electricista">Ingeniería Electricista</option>
-                  <option value="Quimica">Ingeniería Química</option>
-                  <option value="Naval">Ingeniería Naval y Mecánica</option>
-                </select>
-              </div>
-
-              <div class="sm:col-span-8 flex items-end">
-                <div class="w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3.5 py-2 text-[11px] text-slate-400">
-                  <strong class="text-slate-200">Restricción Simbólica Activa:</strong> Sin parámetros de muestreo deprecados (<code>temperature/top_p</code> eliminados en API 3.6+). El determinismo proviene de esquemas <strong>Zod</strong>, políticas <strong>OPA (Rego)</strong> y validación <strong>SHACL</strong> sobre <strong>Neo4j</strong>.
-                </div>
-              </div>
-            </div>
-
             <div>
               <label class="block text-xs font-semibold text-slate-300 mb-1">
-                Descripción Fáctica del Caso a Dictaminar
+                Descripción Fáctica del Caso
               </label>
               <textarea
                 id="textarea-caso"
                 rows="4"
                 required
-                placeholder="Describa de forma detallada los hechos fácticos y técnicos del caso de ingeniería a dictaminar..."
+                placeholder="Describa los hechos fácticos, las partes intervinientes, las conductas desarrolladas, las omisiones alegadas y las cláusulas o defensas invocadas..."
                 class="w-full rounded-xl border border-slate-700 bg-slate-950 p-3.5 text-sm text-slate-100 placeholder-slate-500 focus:border-sky-500 focus:outline-none"
               ></textarea>
             </div>
 
             <div class="flex items-center justify-between gap-4">
               <div id="pipeline-status-badge" class="text-xs text-slate-400">
-                Listo para ejecutar el Grafo de Flujos Determinista (6 etapas).
+                Listo para ejecutar el Pipeline Neuro-Simbólico (6 etapas).
               </div>
               <button
                 id="btn-generar-dictamen"
                 type="submit"
                 class="flex items-center gap-2 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-white shadow-lg shadow-sky-500/25 transition hover:from-sky-400 hover:to-indigo-500 cursor-pointer"
               >
-                <span>Ejecutar Pipeline Neuro-Simbólico</span>
+                <span>Ejecutar Análisis Neuro-Simbólico</span>
                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
@@ -277,11 +239,11 @@ try {
           </form>
         </div>
 
-        <!-- TRAZABILIDAD EN VIVO DE LAS 6 ETAPAS DEL GRAFO DETERMINISTA EN GENKIT -->
+        <!-- TRAZABILIDAD EN VIVO DE LAS 6 ETAPAS DEL PIPELINE -->
         <div class="rounded-2xl border border-slate-800 bg-slate-900/75 p-5 shadow-lg">
           <div class="mb-3 flex items-center justify-between">
             <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">
-              Orquestación Multi-Agente Determinista (6 Compuertas Neuro-Simbólicas)
+              Orquestación Multi-Agente Neuro-Simbólica (6 Etapas Deterministas)
             </h3>
             <span id="active-model-pill" class="rounded-md bg-slate-800 px-2 py-0.5 font-mono text-[11px] text-sky-300">
               Modelo: {CONFIGURED_GEMINI_MODEL}
@@ -291,10 +253,10 @@ try {
           <div id="pipeline-steps-grid" class="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
             <div data-step-card="1" class="rounded-xl border border-slate-800 bg-slate-950/80 p-3 transition">
               <div class="flex items-center justify-between text-xs font-bold text-slate-300">
-                <span>1. FactExtractorFlow</span>
+                <span>1. Clasificador de Hechos</span>
                 <span class="step-badge rounded bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-400">Pendiente</span>
               </div>
-              <p class="step-detail mt-1 text-[11px] text-slate-400">Extracción Zod: Rama FIUBA, Rol, Jurisdicción y Figuras.</p>
+              <p class="step-detail mt-1 text-[11px] text-slate-400">Extracción Zod: Sujetos, conductas, omisiones y defensas.</p>
             </div>
 
             <div data-step-card="2" class="rounded-xl border border-slate-800 bg-slate-950/80 p-3 transition">
@@ -302,15 +264,15 @@ try {
                 <span>2. Motor Deóntico OPA</span>
                 <span class="step-badge rounded bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-400">Pendiente</span>
               </div>
-              <p class="step-detail mt-1 text-[11px] text-slate-400">Evalúa Rego v1: Incumbencias, Ley 10.416 / Dec. 6070 y Kelsen.</p>
+              <p class="step-detail mt-1 text-[11px] text-slate-400">Evalúa Rego v1: Deberes, prohibiciones, nulidades y Kelsen.</p>
             </div>
 
             <div data-step-card="3" class="rounded-xl border border-slate-800 bg-slate-950/80 p-3 transition">
               <div class="flex items-center justify-between text-xs font-bold text-slate-300">
-                <span>3. HybridGraphRetriever</span>
+                <span>3. Recuperador Neo4j</span>
                 <span class="step-badge rounded bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-400">Pendiente</span>
               </div>
-              <p class="step-detail mt-1 text-[11px] text-slate-400">Neo4j HF Vector ({APP_CONFIG.huggingface.model}) + BM25 + Expansión Cypher a 2 saltos OKF.</p>
+              <p class="step-detail mt-1 text-[11px] text-slate-400">Neo4j HF Vector ({APP_CONFIG.huggingface.model}) + BM25 + Expansión Cypher.</p>
             </div>
 
             <div data-step-card="4" class="rounded-xl border border-slate-800 bg-slate-950/80 p-3 transition">
@@ -318,7 +280,7 @@ try {
                 <span>4. Validador SHACL</span>
                 <span class="step-badge rounded bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-400">Pendiente</span>
               </div>
-              <p class="step-detail mt-1 text-[11px] text-slate-400">Verifica LegalAnalysisShape y ejecuta autorreparación Cypher.</p>
+              <p class="step-detail mt-1 text-[11px] text-slate-400">Verifica legal:LegalAnalysisShape y ejecuta autorreparación Cypher.</p>
             </div>
 
             <div data-step-card="5" class="rounded-xl border border-slate-800 bg-slate-950/80 p-3 transition">
@@ -326,7 +288,7 @@ try {
                 <span>5. Agente Exégeta (I-IV)</span>
                 <span class="step-badge rounded bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-400">Pendiente</span>
               </div>
-              <p class="step-detail mt-1 text-[11px] text-slate-400">Redacción iterativa extensa por capítulos guiada por el grafo.</p>
+              <p class="step-detail mt-1 text-[11px] text-slate-400">Redacción iterativa extensa anclada en el texto normativo cargado.</p>
             </div>
 
             <div data-step-card="6" class="rounded-xl border border-slate-800 bg-slate-950/80 p-3 transition">
@@ -334,20 +296,20 @@ try {
                 <span>6. Auditor Epistémico</span>
                 <span class="step-badge rounded bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-400">Pendiente</span>
               </div>
-              <p class="step-detail mt-1 text-[11px] text-slate-400">Verifica trazabilidad de citas OKF contra subgrafo Neo4j.</p>
+              <p class="step-detail mt-1 text-[11px] text-slate-400">Verifica trazabilidad estricta de citas OKF contra subgrafo Neo4j.</p>
             </div>
           </div>
         </div>
 
-        <!-- VISOR DEL DICTAMEN LEGAL-INGENIERIL EXTENSO (STREAMING SECCIÓN POR SECCIÓN) -->
+        <!-- VISOR DEL DICTAMEN EXTENSO -->
         <div class="rounded-2xl border border-slate-800 bg-slate-900/90 p-6 shadow-xl">
           <div class="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
             <div>
               <h2 class="text-base font-bold text-white">
-                Dictamen Académico y Pericial de Ingeniería Legal (FIUBA)
+                Dictamen Jurídico y Análisis Deóntico
               </h2>
               <p id="dictamen-subtitle" class="text-xs text-slate-400">
-                Generación iterativa seccionada anclada en Nodos OKF vigentes y directivas deterministas OPA.
+                Generación fundada exclusivamente en el documento normativo cargado y directivas deterministas OPA.
               </p>
             </div>
             <div class="flex items-center gap-2">
@@ -360,10 +322,10 @@ try {
           <div id="dictamen-viewer" class="dictamen-prose min-h-[420px] text-sm text-slate-200">
             <div class="flex h-72 flex-col items-center justify-center text-center text-slate-400">
               <p class="text-sm font-medium text-slate-300">
-                Presione "Ejecutar Pipeline Neuro-Simbólico" para iniciar la evaluación deóntica y la exégesis extensa por secciones.
+                Presione "Ejecutar Análisis Neuro-Simbólico" para iniciar la subsunción deóntica y la redacción del dictamen.
               </p>
               <p class="mt-1 max-w-md text-xs text-slate-400">
-                Cada cita normativa <code>[norma-...]</code> generada en el dictamen es interactiva y está vinculada en vivo al subgrafo de Neo4j del panel derecho.
+                Cada cita normativa <code>[norma-...]</code> generada es interactiva y permite inspeccionar en vivo el nodo y sus reglas deónticas en el panel derecho.
               </p>
             </div>
           </div>
@@ -387,7 +349,7 @@ try {
               data-tab="tab-opa"
               class="side-tab-btn flex-1 rounded-lg py-2 text-slate-400 hover:text-white transition cursor-pointer"
             >
-              Fallo OPA (Rego)
+              Fallo Deóntico OPA
             </button>
             <button
               type="button"
@@ -401,16 +363,10 @@ try {
           <!-- TAB 1: GRAFO INTERACTIVO NEO4J + INSPECTOR DE NODOS OKF -->
           <div id="tab-graph" class="side-tab-pane space-y-4">
             <div class="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
-              <div class="flex flex-wrap items-center gap-2">
-                <span class="flex items-center gap-1"><span class="h-2.5 w-2.5 rounded-full bg-sky-400"></span> NormaFondo</span>
-                <span class="flex items-center gap-1"><span class="h-2.5 w-2.5 rounded-full bg-rose-400"></span> Responsabilidad</span>
-                <span class="flex items-center gap-1"><span class="h-2.5 w-2.5 rounded-full bg-amber-400"></span> Ejercicio/Incumbencia</span>
-                <span class="flex items-center gap-1"><span class="h-2.5 w-2.5 rounded-full bg-emerald-400"></span> Ética</span>
-              </div>
-              <span class="font-mono text-[10px] text-slate-400">Click en un nodo para inspeccionar</span>
+              <span class="font-mono text-[10px] text-slate-400">Click en un nodo para inspeccionar ontología y deóntica</span>
             </div>
 
-            <!-- Lienzo SVG del Subgrafo de Conocimiento Legal -->
+            <!-- Lienzo SVG del Subgrafo -->
             <div class="relative overflow-hidden rounded-xl border border-slate-800 bg-[#060911]">
               <svg id="neo4j-graph-svg" viewBox="0 0 600 380" class="h-[340px] w-full select-none"></svg>
             </div>
@@ -418,16 +374,31 @@ try {
             <!-- Inspector del Nodo OKF Seleccionado -->
             <div id="okf-node-inspector" class="rounded-xl border border-slate-800 bg-slate-950 p-4 text-xs">
               <div class="flex items-center justify-between border-b border-slate-800 pb-2">
-                <span id="inspector-okf-id" class="font-mono font-bold text-sky-400">norma-ccycn-art-1273</span>
-                <span id="inspector-shape-role" class="rounded bg-sky-500/20 px-2 py-0.5 text-[10px] font-semibold text-sky-300">
-                  NormaFondo
+                <span id="inspector-okf-id" class="font-mono font-bold text-sky-400">norma-id</span>
+                <span id="inspector-status" class="rounded border border-emerald-500/30 bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
+                  Vigente
                 </span>
               </div>
               <h4 id="inspector-title" class="mt-2 font-bold text-white">
-                Seleccione cualquier nodo del grafo superior o cita del dictamen para inspeccionar su entrada OKF atómica.
+                Seleccione un nodo del grafo o una cita del dictamen para inspeccionar su ontología y reglas deónticas.
               </h4>
               <p id="inspector-meta" class="mt-1 text-[11px] text-slate-400"></p>
-              <pre id="inspector-content" class="mt-2.5 max-h-48 overflow-y-auto whitespace-pre-wrap rounded-lg bg-slate-900/90 p-3 font-sans text-xs text-slate-300"></pre>
+
+              <!-- Sección de Ontología y Lógica Deóntica Extraída -->
+              <div id="inspector-deontic-box" class="mt-3 space-y-2 border-t border-slate-800 pt-2">
+                <div class="font-semibold text-sky-300">Matriz Deóntica Extraída del Documento:</div>
+                <div id="inspector-deontic-rules" class="space-y-1.5 max-h-36 overflow-y-auto"></div>
+              </div>
+
+              <div id="inspector-ontology-box" class="mt-3 space-y-1 border-t border-slate-800 pt-2">
+                <div class="font-semibold text-emerald-300">Entidades Ontológicas:</div>
+                <div id="inspector-ontology-entities" class="flex flex-wrap gap-1"></div>
+              </div>
+
+              <div class="mt-3 border-t border-slate-800 pt-2">
+                <div class="font-semibold text-slate-300 mb-1">Texto Normativo:</div>
+                <div id="inspector-content" class="max-h-40 overflow-y-auto whitespace-pre-wrap rounded-lg bg-slate-900/90 p-3 font-sans text-xs text-slate-200"></div>
+              </div>
             </div>
           </div>
 
@@ -435,7 +406,7 @@ try {
           <div id="tab-opa" class="side-tab-pane hidden space-y-4 text-xs">
             <div id="opa-decision-container" class="space-y-3">
               <div class="rounded-xl border border-slate-800 bg-slate-950 p-4 text-slate-400">
-                Ejecute un dictamen para visualizar las reglas Rego activadas, nulidades de orden público (Art. 1276 CCyCN), conflictos de incumbencias y la Pirámide de Kelsen.
+                Ejecute un análisis para visualizar las directivas deónticas (obligaciones, prohibiciones, nulidades y prelación de Kelsen) activadas en OPA a partir del documento cargado.
               </div>
             </div>
           </div>
@@ -444,7 +415,7 @@ try {
           <div id="tab-shacl" class="side-tab-pane hidden space-y-4 text-xs">
             <div id="shacl-report-container" class="space-y-3">
               <div class="rounded-xl border border-slate-800 bg-slate-950 p-4 text-slate-400">
-                Ejecute un dictamen para inspeccionar el reporte W3C SHACL (<code>fiuba:LegalAnalysisShape</code>), las tripletas RDF en formato Turtle y la auditoría epistémica de citas post-generación.
+                Ejecute un análisis para inspeccionar el reporte W3C SHACL (<code>legal:LegalAnalysisShape</code>), las tripletas RDF en Turtle y la auditoría epistémica de citas.
               </div>
             </div>
           </div>
@@ -458,13 +429,6 @@ try {
     let currentGraphNodes = initialCatalog.nodes || [];
     let currentGraphEdges = initialCatalog.edges || [];
     let selectedNodeId = currentGraphNodes[0]?.okf_id || null;
-
-    const ROLE_COLORS = {
-      NormaFondo: '#38bdf8',
-      PrincipioDeResponsabilidad: '#fb7185',
-      MarcoEjercicioProfesional: '#fbbf24',
-      EticaProfesional: '#34d399',
-    };
 
     // 1. Renderizador del Grafo SVG de Neo4j
     function renderNeo4jGraph(nodes, edges, highlightId = null) {
@@ -482,7 +446,7 @@ try {
       const cx = width / 2;
       const cy = height / 2;
 
-      // Posicionamiento en dos anillos concéntricos para máxima legibilidad de aristas
+      // Posicionamiento concéntrico
       const positions = new Map();
       nodes.forEach((node, idx) => {
         const isInner = idx < 5;
@@ -497,7 +461,7 @@ try {
         });
       });
 
-      // Definición de marcador de flecha para aristas dirigidas
+      // Flechas
       const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
       defs.innerHTML = `
         <marker id="arrow" viewBox="0 0 10 10" refX="22" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
@@ -506,7 +470,7 @@ try {
       `;
       svg.appendChild(defs);
 
-      // Dibujar aristas
+      // Aristas
       edges.forEach((edge) => {
         const src = positions.get(edge.source);
         const dst = positions.get(edge.target);
@@ -523,26 +487,22 @@ try {
         svg.appendChild(line);
       });
 
-      // Dibujar nodos
+      // Nodos
       positions.forEach(({ x, y, node }) => {
         const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
         g.setAttribute('class', 'cursor-pointer transition-transform');
         const isSelected = node.okf_id === (highlightId || selectedNodeId);
-        const color = ROLE_COLORS[node.shape_role] || '#38bdf8';
 
         const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
         circle.setAttribute('cx', String(x));
         circle.setAttribute('cy', String(y));
         circle.setAttribute('r', isSelected ? '16' : '12');
         circle.setAttribute('fill', '#0f172a');
-        circle.setAttribute('stroke', color);
+        circle.setAttribute('stroke', isSelected ? '#38bdf8' : '#6366f1');
         circle.setAttribute('stroke-width', isSelected ? '3.5' : '2');
         g.appendChild(circle);
 
-        const shortLabel = node.okf_id
-          .replace(/^norma-/, '')
-          .replace(/^ccycn-/, '')
-          .slice(0, 14);
+        const shortLabel = node.article_number ? `Art. ${node.article_number}` : node.okf_id.replace(/^norma-/, '').slice(0, 12);
 
         const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
         text.setAttribute('x', String(x));
@@ -574,14 +534,63 @@ try {
     function inspectOKFNode(node) {
       if (!node) return;
       document.getElementById('inspector-okf-id').textContent = node.okf_id;
-      document.getElementById('inspector-shape-role').textContent = node.shape_role;
+      const statusEl = document.getElementById('inspector-status');
+      if (statusEl) statusEl.textContent = node.status || 'Vigente';
       document.getElementById('inspector-title').textContent = node.title;
       document.getElementById('inspector-meta').textContent =
-        `${node.law_number} (${node.article_number}) • Jurisdicción: ${node.jurisdiction} • Estado: ${node.status} • Vía: ${node.retrieval_reason || 'Grafo OKF'}`;
+        `${node.law_number}${node.article_number ? ' • Art. ' + node.article_number : ''} • Estado: ${node.status || 'Vigente'} • Vía: ${node.retrieval_reason || 'Grafo OKF'}`;
       document.getElementById('inspector-content').textContent = node.content;
+
+      // Renderizar reglas deónticas
+      const rulesBox = document.getElementById('inspector-deontic-rules');
+      if (rulesBox) {
+        const rules = node.deontic_rules || [];
+        if (rules.length === 0) {
+          rulesBox.innerHTML = '<span class="text-[11px] text-slate-500">Sin reglas deónticas explícitas registradas.</span>';
+        } else {
+          rulesBox.innerHTML = rules
+            .map((r) => {
+              const badgeClass =
+                r.modalidad === 'OBLIGACION'
+                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                  : r.modalidad === 'PROHIBICION'
+                  ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                  : r.modalidad === 'SANCION_NULIDAD'
+                  ? 'bg-purple-500/20 text-purple-300 border-purple-500/30'
+                  : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30';
+              return `
+                <div class="rounded border border-slate-800 bg-slate-900/60 p-2 text-[11px]">
+                  <div class="flex items-center justify-between gap-1">
+                    <span class="rounded border px-1.5 py-0.2 font-mono text-[10px] font-bold ${badgeClass}">${r.modalidad}</span>
+                    <span class="font-mono text-slate-400 text-[10px]">${r.id}</span>
+                  </div>
+                  <div class="mt-1 text-slate-200"><strong>${r.sujeto_normado}:</strong> ${r.conducta}</div>
+                  <div class="mt-0.5 text-slate-400"><em>Efecto / Sanción:</em> ${r.consecuencia}</div>
+                </div>
+              `;
+            })
+            .join('');
+        }
+      }
+
+      // Renderizar entidades ontológicas
+      const entBox = document.getElementById('inspector-ontology-entities');
+      if (entBox) {
+        const ents = node.ontological_entities || [];
+        if (ents.length === 0) {
+          entBox.innerHTML = '<span class="text-[11px] text-slate-500">Sin entidades registradas.</span>';
+        } else {
+          entBox.innerHTML = ents
+            .map(
+              (e) =>
+                `<span class="rounded bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[10px] text-emerald-300" title="${e.descripcion}">${e.nombre} (${e.categoria})</span>`
+            )
+            .join('');
+        }
+      }
     }
 
-    // Inicializar grafo con el catálogo inicial
+    // Inicializar grafo
     renderNeo4jGraph(currentGraphNodes, currentGraphEdges);
 
     // 2. Manejo de Pestañas del Panel Lateral
@@ -608,7 +617,7 @@ try {
       btn.addEventListener('click', () => activateSideTab(btn.getAttribute('data-tab')));
     });
 
-    // 3. Subida e Ingesta de Leyes por PDF (Con validación SHACL Pre-Ingesta)
+    // 3. Subida e Ingesta de Documentos PDF
     const pdfInput = document.getElementById('pdf-file-input');
     const pdfLabel = document.getElementById('pdf-file-label');
     const pdfForm = document.getElementById('pdf-upload-form');
@@ -650,13 +659,13 @@ try {
         const ids = (result.nodesIngested || []).map((n) => n.okf_id).join(', ');
         pdfResultBox.innerHTML = `
           <div class="flex items-center justify-between font-bold text-emerald-300">
-            <span>✓ Ingesta Atómica OKF y Validación SHACL Pre-Ingesta Exitosa (${result.fileName})</span>
-            <span>${result.nodesIngested.length} Nodos creados en Neo4j</span>
+            <span>✓ Ingesta Atómica OKF y Extracción Deóntica Exitosa (${result.fileName})</span>
+            <span>${result.nodesIngested.length} Artículos en Neo4j</span>
           </div>
           <p class="mt-1 text-emerald-100/90">
-            Se extrajeron <strong>${result.extractedCharacters}</strong> caracteres y se estructuraron <strong>${result.atomicArticlesCreated}</strong> artículos atómicos con estado <code>sh:conforms = true</code>.
+            Se extrajeron <strong>${result.extractedCharacters}</strong> caracteres y se estructuraron <strong>${result.atomicArticlesCreated}</strong> artículos atómicos con su ontología y lógica deóntica (<code>sh:conforms = true</code>).
           </p>
-          <p class="mt-1 font-mono text-[11px] text-sky-300">Nodos OKF incorporados al grafo: ${ids}</p>
+          <p class="mt-1 font-mono text-[11px] text-sky-300">Nodos OKF indexados: ${ids}</p>
         `;
       } else {
         const firstViolation =
@@ -666,10 +675,9 @@ try {
         pdfResultBox.className = 'mt-3 rounded-xl border border-rose-500/40 bg-rose-950/30 p-3.5 text-xs text-rose-200';
         pdfResultBox.innerHTML = `
           <div class="font-bold text-rose-300">
-            ✗ Compuerta SHACL Pre-Ingesta Rechazó la Norma (${result.fileName || 'PDF'})
+            ✗ Compuerta SHACL Pre-Ingesta Rechazó el Documento (${result.fileName || 'PDF'})
           </div>
-          <p class="mt-1">Motivo determinista (<code>fiuba:OKFNodeShape</code>): <strong>${firstViolation}</strong></p>
-          <p class="mt-0.5 text-[11px] text-rose-300/80">Ningún nodo inválido fue ingresado a Neo4j, preservando la integridad epistémica del grafo.</p>
+          <p class="mt-1">Motivo determinista (<code>legal:OKFNodeShape</code>): <strong>${firstViolation}</strong></p>
         `;
       }
     }
@@ -683,28 +691,54 @@ try {
         pdfResultBox.className = 'mt-3 rounded-xl border border-amber-500/40 bg-amber-950/30 p-3.5 text-xs text-amber-200';
         pdfResultBox.innerHTML = `
           <div class="font-bold text-amber-300">Seleccione un archivo PDF</div>
-          <p class="mt-1">Debe seleccionar un archivo PDF legal de su disco para que el sistema procese su ingesta atómica OKF y validación SHACL.</p>
+          <p class="mt-1">Debe seleccionar un archivo PDF legal de su disco para que el sistema procese su ingesta atómica y extraiga su matriz deóntica.</p>
         `;
         return;
       }
 
-      const formData = new FormData(pdfForm);
-      const res = await fetch('/api/laws/upload', {
-        method: 'POST',
-        body: formData,
-      });
-      const data = await res.json();
-      renderPdfIngestionFeedback(data);
-      if (data.success) await refreshCatalogGraph();
+      const btnSubmitPdf = document.getElementById('btn-submit-pdf');
+      btnSubmitPdf.disabled = true;
+      btnSubmitPdf.classList.add('opacity-60');
+      pdfResultBox.classList.remove('hidden');
+      pdfResultBox.className = 'mt-3 rounded-xl border border-sky-500/40 bg-sky-950/30 p-3.5 text-xs text-sky-200 animate-pulse';
+      pdfResultBox.innerHTML = `
+        <div class="font-bold text-sky-300">Procesando documento normativo con Gemini 3.6 Flash...</div>
+        <p class="mt-1">Segmentando artículos atómicos, extrayendo ontología y lógica deóntica, calculando embeddings locales e indexando en Neo4j...</p>
+      `;
+
+      try {
+        const formData = new FormData(pdfForm);
+        const res = await fetch('/api/laws/upload', {
+          method: 'POST',
+          body: formData,
+        });
+        const data = await res.json();
+        renderPdfIngestionFeedback(data);
+        if (data.success) await refreshCatalogGraph();
+      } catch (err) {
+        pdfResultBox.className = 'mt-3 rounded-xl border border-rose-500/40 bg-rose-950/30 p-3.5 text-xs text-rose-200';
+        pdfResultBox.innerHTML = `<div class="font-bold text-rose-300">Error al procesar: ${err.message}</div>`;
+      } finally {
+        btnSubmitPdf.disabled = false;
+        btnSubmitPdf.classList.remove('opacity-60');
+      }
     });
 
-    // Toggle del panel PDF
     document.getElementById('btn-toggle-pdf-panel')?.addEventListener('click', () => {
-      const sec = document.getElementById('pdf-upload-section');
-      sec?.scrollIntoView({ behavior: 'smooth' });
+      document.getElementById('pdf-upload-section')?.scrollIntoView({ behavior: 'smooth' });
     });
 
-    // 5. Renderizado de Markdown a HTML académico con píldoras interactivas [okf_id]
+    // Vaciar base de leyes
+    document.getElementById('btn-clear-catalog')?.addEventListener('click', async () => {
+      if (!confirm('¿Desea vaciar por completo la base de normas y volver a 0 nodos?')) return;
+      const res = await fetch('/api/laws/catalog', { method: 'DELETE' });
+      if (res.ok) {
+        await refreshCatalogGraph();
+        alert('Base de conocimiento vaciada. Ahora puede cargar nuevas normas en PDF.');
+      }
+    });
+
+    // 4. Formateo de Markdown con Citas Interactivas [okf_id]
     function formatDictamenMarkdownToHtml(markdownText) {
       let html = markdownText
         .replace(/^#### (.*$)/gim, '<h4>$1</h4>')
@@ -715,17 +749,14 @@ try {
         .replace(/\*(.*?)\*/g, '<em>$1</em>')
         .replace(/`([^`]+)`/g, '<code>$1</code>');
 
-      // Convertir tablas Markdown
+      // Tablas Markdown
       html = html.replace(/((?:\|.*\|\n)+)/g, (tableBlock) => {
         const rows = tableBlock.trim().split('\n');
         if (rows.length < 2) return tableBlock;
         let tableHtml = '<table>';
         rows.forEach((row, rIdx) => {
           if (row.includes('---')) return;
-          const cells = row
-            .split('|')
-            .slice(1, -1)
-            .map((c) => c.trim());
+          const cells = row.split('|').slice(1, -1).map((c) => c.trim());
           const tag = rIdx === 0 ? 'th' : 'td';
           tableHtml += '<tr>' + cells.map((c) => `<${tag}>${c}</${tag}>`).join('') + '</tr>';
         });
@@ -733,12 +764,12 @@ try {
         return tableHtml;
       });
 
-      // Convertir citas [norma-...] en botones interactivos que resaltan el nodo en el grafo Neo4j
+      // Píldoras de citas interactivas [norma-...]
       html = html.replace(/\[(norma-[a-z0-9-]+)\]/gi, (_, okfId) => {
         return `<button type="button" data-cite-okf="${okfId}" class="cite-okf-pill inline-flex items-center gap-1 rounded-md border border-sky-500/40 bg-sky-500/15 px-1.5 py-0.5 font-mono text-xs font-semibold text-sky-300 hover:bg-sky-500/30 cursor-pointer">🔗 ${okfId}</button>`;
       });
 
-      // Párrafos y listas simples
+      // Párrafos y listas
       const blocks = html.split('\n\n');
       return blocks
         .map((b) => {
@@ -771,16 +802,16 @@ try {
       });
     }
 
-    // 6. Renderizadores de los Paneles OPA y SHACL
+    // 5. Renderizadores de los Paneles OPA y SHACL
     function renderOPADecisionPanel(opa, hechos) {
       const container = document.getElementById('opa-decision-container');
       if (!container || !opa) return;
 
       const alerts = [
-        ...(opa.infracciones_ejercicio || []),
-        ...(opa.clausulas_nulas || []),
-        ...(opa.conflictos_incumbencia || []),
-        ...(opa.directivas_defensa_consumidor || []),
+        ...(opa.incumplimientos_obligacion || []),
+        ...(opa.violaciones_prohibicion || []),
+        ...(opa.clausulas_invalidas || []),
+        ...(opa.permisiones_aplicables || []),
       ];
 
       container.innerHTML = `
@@ -790,26 +821,30 @@ try {
             <span class="font-mono text-[11px] text-amber-200">${opa.evaluation_time_ms} ms (0 tokens LLM)</span>
           </div>
           <p class="mt-1 text-[11px] text-slate-300">
-            Rama: <strong>${hechos.rama_ingenieria}</strong> • Jurisdicción: <strong>${hechos.jurisdiccion}</strong> • Plazo: <strong>${opa.evaluacion_plazos?.veredicto_determinista}</strong>
+            Parte Evaluada: <strong>${hechos.parte_evaluada}</strong> (${hechos.rol_o_condicion_juridica}) • Nodos Obligatorios: <strong>${(opa.nodos_okf_obligatorios || []).length}</strong>
           </p>
         </div>
 
         <div class="space-y-2">
-          <h4 class="font-bold uppercase tracking-wider text-slate-300">Veredictos Deterministas y Reglas Rego Activadas</h4>
-          ${alerts
-            .map(
-              (a) => `
-            <div class="rounded-lg border border-slate-800 bg-slate-950 p-3">
-              <div class="flex items-center justify-between gap-2">
-                <span class="font-mono font-bold text-rose-400">${a.codigo}</span>
-                <span class="rounded bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] text-sky-300">${a.fundamento_okf_id}</span>
+          <h4 class="font-bold uppercase tracking-wider text-slate-300">Reglas Deónticas y Veredictos Deterministas</h4>
+          ${
+            alerts.length === 0
+              ? '<div class="rounded-lg border border-slate-800 bg-slate-950 p-3 text-slate-400">Sin infracciones directas activadas por los hechos.</div>'
+              : alerts
+                  .map(
+                    (a) => `
+              <div class="rounded-lg border border-slate-800 bg-slate-950 p-3">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="font-mono font-bold text-rose-400">${a.codigo}</span>
+                  <span class="rounded bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] text-sky-300">${a.fundamento_okf_id}</span>
+                </div>
+                <div class="mt-1 font-semibold text-white">${a.veredicto_determinista}</div>
+                <p class="mt-1 text-[11px] text-slate-400">${a.directiva_redaccion}</p>
               </div>
-              <div class="mt-1 font-semibold text-white">${a.veredicto_determinista}</div>
-              <p class="mt-1 text-[11px] text-slate-400">${a.directiva_redaccion}</p>
-            </div>
-          `
-            )
-            .join('')}
+            `
+                  )
+                  .join('')
+          }
         </div>
 
         <div class="rounded-xl border border-slate-800 bg-slate-950 p-3">
@@ -821,6 +856,23 @@ try {
               <div class="border-l-2 border-sky-500 pl-2.5 py-0.5">
                 <div class="font-semibold text-slate-200">Rango ${k.rango}: ${k.nivel}</div>
                 <div class="text-[11px] text-slate-400">${k.aplicacion}</div>
+              </div>
+            `
+              )
+              .join('')}
+          </div>
+        </div>
+
+        <div class="rounded-xl border border-slate-800 bg-slate-950 p-3">
+          <h4 class="font-bold text-indigo-300 mb-1.5">Escenarios Contrafácticos Dinámicos</h4>
+          <div class="space-y-2">
+            ${(opa.escenarios_contrafacticos || [])
+              .map(
+                (cf) => `
+              <div class="rounded bg-slate-900/80 p-2.5">
+                <div class="font-semibold text-slate-200">${cf.titulo}</div>
+                <div class="mt-0.5 text-[11px] text-slate-400">${cf.hipotesis}</div>
+                <div class="mt-1 text-[11px] text-sky-300"><em>Regla:</em> ${cf.regla_aplicable}</div>
               </div>
             `
               )
@@ -840,14 +892,14 @@ try {
         } p-3.5">
           <div class="flex items-center justify-between">
             <span class="font-bold ${shaclFinal?.conforms ? 'text-emerald-300' : 'text-rose-300'}">
-              W3C SHACL (fiuba:LegalAnalysisShape): sh:conforms = ${Boolean(shaclFinal?.conforms)}
+              W3C SHACL (legal:LegalAnalysisShape): sh:conforms = ${Boolean(shaclFinal?.conforms)}
             </span>
             <span class="rounded bg-slate-900 px-2 py-0.5 font-mono text-[10px] text-purple-300">
-              ${reparacionEjecutada ? 'Autorreparado vía Cypher' : '1° Paso Directo'}
+              ${reparacionEjecutada ? 'Autorreparado vía Cypher' : 'Conforme Directo'}
             </span>
           </div>
           <p class="mt-1 text-[11px] text-slate-300">
-            Verifica que el subgrafo conecte el Hecho Ingenieril con al menos 1 <code>NormaFondo</code>, 1 <code>PrincipioDeResponsabilidad</code>, 1 <code>MarcoEjercicioProfesional</code> y 1 <code>EticaProfesional</code>.
+            Valida que el subgrafo conecte los hechos del caso con normas vigentes del documento y cubra los nodos obligatorios de OPA.
           </p>
         </div>
 
@@ -856,7 +908,7 @@ try {
             ? `
         <div class="rounded-xl border border-sky-500/30 bg-sky-950/20 p-3.5">
           <div class="font-bold text-sky-300">
-            6. Certificado de Auditoría Epistémica Post-Generación
+            Certificado de Auditoría Epistémica Post-Generación (legal:EpistemicAuditShape)
           </div>
           <p class="mt-1 text-[11px] text-slate-200">${auditoria.auditSummary}</p>
           <div class="mt-2 flex flex-wrap gap-1">
@@ -881,7 +933,7 @@ try {
       `;
     }
 
-    // 7. Ejecución en Streaming del Pipeline de 6 Agentes
+    // 6. Ejecución del Pipeline Neuro-Simbólico
     const dictamenForm = document.getElementById('dictamen-form');
     const viewer = document.getElementById('dictamen-viewer');
     const statusBadge = document.getElementById('pipeline-status-badge');
@@ -913,14 +965,12 @@ try {
     dictamenForm?.addEventListener('submit', async (e) => {
       e.preventDefault();
       const casoPlanteado = document.getElementById('textarea-caso').value;
-      const especialidadIngenieria = document.getElementById('select-especialidad').value;
       const btnSubmit = document.getElementById('btn-generar-dictamen');
 
       if (currentGraphNodes.length === 0) {
-        statusBadge.textContent = 'Debe cargar al menos una ley en PDF desde el panel superior antes de ejecutar el análisis.';
-        viewer.innerHTML = '<div class="rounded-xl border border-amber-500/40 bg-amber-950/30 p-4 text-xs text-amber-200"><strong class="text-amber-300">Base de conocimiento vacía:</strong> Por favor suba un PDF normativo desde el panel superior. El sistema analizará estricta y exclusivamente las leyes que usted cargue.</div>';
-        const sec = document.getElementById('pdf-upload-section');
-        sec?.scrollIntoView({ behavior: 'smooth' });
+        statusBadge.textContent = 'Debe cargar al menos un documento normativo en PDF antes de ejecutar el análisis.';
+        viewer.innerHTML = '<div class="rounded-xl border border-amber-500/40 bg-amber-950/30 p-4 text-xs text-amber-200"><strong class="text-amber-300">Base de conocimiento vacía:</strong> Por favor suba un PDF normativo desde el panel superior. El sistema analizará estricta y exclusivamente el documento cargado.</div>';
+        document.getElementById('pdf-upload-section')?.scrollIntoView({ behavior: 'smooth' });
         return;
       }
 
@@ -948,7 +998,7 @@ try {
         const response = await fetch('/api/dictamen/stream', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ casoPlanteado, especialidadIngenieria }),
+          body: JSON.stringify({ casoPlanteado }),
         });
 
         const reader = response.body.getReader();
@@ -979,7 +1029,7 @@ try {
 
               if (ev.step === 2 && ev.status === 'completed' && ev.payload) {
                 latestOPA = ev.payload;
-                renderOPADecisionPanel(latestOPA, latestHechos || { rama_ingenieria: especialidadIngenieria, jurisdiccion: 'PBA' });
+                renderOPADecisionPanel(latestOPA, latestHechos || { parte_evaluada: 'Parte evaluada', rol_o_condicion_juridica: 'Sujeto normado' });
               }
 
               if (ev.step === 3 && ev.status === 'completed' && ev.payload) {
@@ -1012,7 +1062,7 @@ try {
               }
             } else if (msg.type === 'error') {
               statusBadge.textContent = `Aviso: ${msg.data?.message || 'Error en el pipeline'}`;
-              viewer.innerHTML = `<div class="rounded-xl border border-rose-500/40 bg-rose-950/40 p-4 text-xs text-rose-200"><strong class="text-rose-300">Aviso del Sistema Neuro-Simbólico:</strong><p class="mt-1">${msg.data?.message || 'Error interno'}</p></div>`;
+              viewer.innerHTML = `<div class="rounded-xl border border-rose-500/40 bg-rose-950/40 p-4 text-xs text-rose-200"><strong class="text-rose-300">Aviso del Sistema:</strong><p class="mt-1">${msg.data?.message || 'Error interno'}</p></div>`;
             } else if (msg.type === 'complete') {
               const finalData = msg.data;
               viewer.innerHTML = formatDictamenMarkdownToHtml(finalData.dictamenCompletoMarkdown);
@@ -1024,7 +1074,7 @@ try {
                 finalData.reparacionSHACLEjecutada,
                 finalData.auditoriaEpistemica
               );
-              statusBadge.textContent = '✓ Dictamen Neuro-Simbólico completado y auditado con trazabilidad SHACL + OPA.';
+              statusBadge.textContent = '✓ Dictamen completado y auditado con trazabilidad SHACL + OPA.';
             }
           }
         }
@@ -1038,4 +1088,3 @@ try {
     });
   </script>
 </Layout>
-

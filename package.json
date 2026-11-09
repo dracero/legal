@@ -1,8 +1,8 @@
 {
-  "name": "fiuba-legal-neurosymbolic",
+  "name": "legal-deontic-neurosymbolic",
   "type": "module",
   "version": "1.0.0",
-  "description": "Sistema Neuro-Simbólico de Ingeniería Legal y Ejercicio Profesional (FIUBA) - Astro + Genkit + Neo4j + OKF + OPA + SHACL",
+  "description": "Sistema Neuro-Simbólico de Análisis Legal y Razonamiento Deóntico - Astro + Gemini 3.6 + Neo4j + OKF + OPA + SHACL",
   "engines": {
     "node": ">=22.0.0"
   },
