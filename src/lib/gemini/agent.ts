@@ -5,6 +5,7 @@ import { evaluarEnServidorOPA, type HechosIngenieria, type PolicyDecision } from
 import {
   hybridRetrieveAndExpandSubgraph,
   completarNodosFaltantesNeo4j,
+  getAllCatalogOKFNodes,
   type OKFNode,
   type GraphEdge,
 } from '../neo4j/client.ts';
@@ -138,29 +139,55 @@ async function invokeGemini(params: {
   responseSchema?: any;
   maxOutputTokens?: number;
 }): Promise<string> {
-  const apiKey = getNextGeminiApiKey();
-  const client = new GoogleGenAI({ apiKey });
   const modelName = CONFIGURED_GEMINI_MODEL;
+  let lastError: any = null;
 
-  const config: Record<string, any> = {
-    systemInstruction: params.systemInstruction,
-  };
-  if (params.responseMimeType) config.responseMimeType = params.responseMimeType;
-  if (params.responseSchema) config.responseSchema = params.responseSchema;
-  if (params.maxOutputTokens) config.maxOutputTokens = params.maxOutputTokens;
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    const apiKey = getNextGeminiApiKey();
+    const client = new GoogleGenAI({ apiKey });
 
-  // Llamada directa sin parámetros deprecados (temperature/top_p/top_k)
-  const response = await client.models.generateContent({
-    model: modelName,
-    contents: params.contents,
-    config,
-  });
+    const config: Record<string, any> = {
+      systemInstruction: params.systemInstruction,
+    };
+    if (params.responseMimeType) config.responseMimeType = params.responseMimeType;
+    if (params.responseSchema) config.responseSchema = params.responseSchema;
+    if (params.maxOutputTokens) config.maxOutputTokens = params.maxOutputTokens;
 
-  if (!response.text || response.text.trim().length === 0) {
-    throw new Error(`El modelo Gemini '${modelName}' no devolvió texto en su respuesta.`);
+    try {
+      // Llamada directa sin parámetros deprecados (temperature/top_p/top_k)
+      const response = await client.models.generateContent({
+        model: modelName,
+        contents: params.contents,
+        config,
+      });
+
+      if (!response.text || response.text.trim().length === 0) {
+        throw new Error(`El modelo Gemini '${modelName}' no devolvió texto en su respuesta.`);
+      }
+
+      return response.text.trim();
+    } catch (err: any) {
+      lastError = err;
+      const isTransient =
+        err.status === 503 ||
+        err.status === 429 ||
+        err.message?.includes('503') ||
+        err.message?.includes('429') ||
+        err.message?.includes('high demand') ||
+        err.message?.includes('UNAVAILABLE');
+
+      if (isTransient && attempt < 5) {
+        const delays = [1500, 3000, 5000, 8000];
+        const delay = delays[attempt - 1] || 4000;
+        console.warn(`[Gemini ${modelName}] Reintentando tras alta demanda transitoria en Google (intento ${attempt}/5 en ${delay}ms)...`);
+        await new Promise((r) => setTimeout(r, delay));
+        continue;
+      }
+      throw err;
+    }
   }
 
-  return response.text.trim();
+  throw lastError;
 }
 
 /**
@@ -230,9 +257,10 @@ export async function generateChapterSection(
     systemInstruction: `Actúa como Profesor Titular de Ingeniería Legal y Ejercicio Profesional (FIUBA).
 Desarrolla de forma exhaustiva, doctrinal y extensa el capítulo solicitado: ${cap.titulo} (${cap.subtitulo}).
 RESTRICCIÓN SIMBÓLICA ESTRICTA:
-1. Debes obedecer las directivas deterministas de OPA adjuntas sin contradecirlas.
-2. Debes basar toda cita legal exclusivamente en los nodos OKF provistos desde el subgrafo de Neo4j, citando explícitamente su identificador entre corchetes [okf_id] (ejemplo: [norma-ccycn-art-1273]).
-3. Redacta en Markdown académico profundo y riguroso.`,
+1. El análisis debe basarse ESTRICTA Y EXCLUSIVAMENTE en los nodos OKF provistos en 'nodosOKFVigentes' (que provienen de las normas cargadas por el usuario). No menciones ni inventes normas fuera de este conjunto.
+2. Debes obedecer rigurosamente las directivas deterministas de OPA adjuntas.
+3. Cita obligatoriamente cada norma utilizada mediante su identificador [okf_id] entre corchetes (ejemplo: [${subgrafoOKF[0]?.okf_id || 'norma-id'}]).
+4. Redacta en Markdown académico profundo y riguroso.`,
     contents: JSON.stringify({
       capituloActual: cap,
       hechosDelCaso: hechos,
@@ -286,6 +314,14 @@ export async function executeNeuroSymbolicPipeline(
     if (onEvent) onEvent(ev);
   };
 
+  // 0. Verificar si existen normas cargadas por el usuario en Neo4j
+  const { nodes: catalogNodes } = await getAllCatalogOKFNodes();
+  if (catalogNodes.length === 0) {
+    throw new Error(
+      'No se han subido leyes o resoluciones en PDF. Por favor cargue al menos un documento normativo en PDF desde el panel superior para analizar el caso (el sistema analiza estricta y exclusivamente las normas que usted ingrese).'
+    );
+  }
+
   // PASO 1: Extracción de Hechos (FactExtractorFlow)
   emit({
     step: 1,
@@ -312,10 +348,10 @@ export async function executeNeuroSymbolicPipeline(
     stageId: 'OPAPolicyGate',
     title: '2. Motor Deóntico de Políticas (OPA / Rego v1)',
     status: 'running',
-    detail: 'Evaluando incumbencias, colegiación, orden público y prelación de Kelsen en OPA...',
+    detail: 'Evaluando incumbencias, colegiación, orden público y prelación de Kelsen en OPA sobre las normas cargadas...',
   });
 
-  const directivasOPA = await evaluarEnServidorOPA(hechos);
+  const directivasOPA = await evaluarEnServidorOPA(hechos, catalogNodes);
 
   emit({
     step: 2,

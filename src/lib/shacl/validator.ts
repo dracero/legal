@@ -106,6 +106,7 @@ export async function validarGrafoConSHACL(
   for (const node of vigentes) {
     const safeId = node.okf_id.replace(/[^a-zA-Z0-9_-]/g, '_');
     const pred = roleToPredicate[node.shape_role] || 'hasNormaFondo';
+    lines.push(`  fiuba:hasNormaVigente fiuba:${safeId} ;`);
     lines.push(`  fiuba:${pred} fiuba:${safeId} ;`);
   }
 

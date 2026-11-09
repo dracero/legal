@@ -1,6 +1,6 @@
 # Sistema Neuro-Simbólico de Ingeniería Legal y Ejercicio Profesional (FIUBA)
 
-Plataforma Fullstack en **Astro SSR + Google GenAI (Gemini 3.8 Flash / Gemini 3.6 Flash) + Embeddings de Hugging Face (all-MiniLM-L6-v2) + Neo4j Híbrido + Google OKF (Open Knowledge Format) + Open Policy Agent (OPA / Rego v1) + W3C SHACL** diseñada para todas las especialidades de la Facultad de Ingeniería de la Universidad de Buenos Aires (**Civil, Industrial, Informática, Electrónica, Mecánica, Electricista, Química y Naval**).
+Plataforma Fullstack en **Astro SSR + Google GenAI (Gemini 3.6 Flash) + Embeddings de Hugging Face (all-MiniLM-L6-v2) + Neo4j Híbrido + Google OKF (Open Knowledge Format) + Open Policy Agent (OPA / Rego v1) + W3C SHACL** diseñada para todas las especialidades de la Facultad de Ingeniería de la Universidad de Buenos Aires (**Civil, Industrial, Informática, Electrónica, Mecánica, Electricista, Química y Naval**).
 
 ---
 
@@ -34,7 +34,7 @@ Una vez iniciado, abrí **`http://localhost:4321`** en tu navegador.
 - **Índice Vectorial en Neo4j:** Configurado con cardinalidad exacta de `384` dimensiones (`vector.similarity_function: 'cosine'`).
 
 ### 2. Cero Modelos Fallback (Sin Fallback Models)
-- El sistema utiliza exclusivamente el modelo de razonamiento configurado en **`GEMINI_MODEL`** (por defecto `gemini-3.8-flash` o `gemini-3.6-flash`).
+- El sistema utiliza exclusivamente el modelo de razonamiento configurado en **`GEMINI_MODEL`** (`gemini-3.6-flash`).
 - **Determinismo Neuro-Simbólico:** Sin parámetros de muestreo deprecados (`temperature`, `top_p`, `top_k` eliminados de la API de Gemini). El determinismo está garantizado por el anclaje simbólico provisto por **OPA**, **SHACL** y esquemas estructurados **Zod**.
 - Si la llamada al modelo configurado encuentra un error, se propaga directamente con diagnóstico exacto sin conmutar silenciosamente a modelos de menor capacidad.
 
@@ -134,7 +134,7 @@ Codifica en **Rego v1** las matrices de decisión legal:
 ```env
 # Modelo Gemini (Google GenAI) - Sin modelo fallback
 GEMINI_API_KEY=tu_clave_gemini
-GEMINI_MODEL=gemini-3.8-flash
+GEMINI_MODEL=gemini-3.6-flash
 GEMINI_MAX_OUTPUT_TOKENS=32768
 
 # Embeddings de Hugging Face (all-MiniLM-L6-v2 de 384 dimensiones)

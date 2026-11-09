@@ -1,7 +1,13 @@
 import path from 'path';
 import os from 'os';
 import fs from 'fs';
+import dns from 'dns';
 import dotenv from 'dotenv';
+
+// Priorizar resolución IPv4 para compatibilidad de red inmediata
+try {
+  dns.setDefaultResultOrder('ipv4first');
+} catch {}
 
 dotenv.config();
 
@@ -45,7 +51,7 @@ export const APP_CONFIG = {
   port: Number(process.env.PORT || 4321),
   gemini: {
     // Modelo único configurado (sin modelo fallback)
-    model: process.env.GEMINI_MODEL || 'gemini-3.8-flash',
+    model: process.env.GEMINI_MODEL || 'gemini-3.6-flash',
     maxOutputTokens: Number(process.env.GEMINI_MAX_OUTPUT_TOKENS || 32768),
   },
   huggingface: {

@@ -40,7 +40,10 @@ async function startDevEnvironment() {
   console.log(`\n[4/4] Iniciando servidor Fullstack Astro SSR en http://localhost:${port} ...`);
   const astroProc = spawn('./node_modules/.bin/astro', ['dev', '--port', port], {
     stdio: 'inherit',
-    env: process.env,
+    env: {
+      ...process.env,
+      NODE_OPTIONS: `${process.env.NODE_OPTIONS || ''} --dns-result-order=ipv4first`.trim(),
+    },
   });
 
   astroProc.on('close', (code) => {

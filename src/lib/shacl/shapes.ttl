@@ -49,33 +49,20 @@ fiuba:OKFNodeShape
     ] .
 
 # 2. Shape Pre-Generación para el Esqueleto Argumental del Dictamen Legal
+# Requiere que el subgrafo conecte con al menos una norma vigente cargada por el usuario
+# y que no falte ningún nodo obligatorio dictado por OPA
 fiuba:LegalAnalysisShape
     a sh:NodeShape ;
     sh:targetClass fiuba:DictamenLegal ;
     sh:property [
-        sh:path fiuba:hasNormaFondo ;
+        sh:path fiuba:hasNormaVigente ;
         sh:minCount 1 ;
-        sh:message "NormaFondo|El subgrafo debe conectar el hecho ingenieril con al menos una Norma de Fondo vigente." ;
-    ] ;
-    sh:property [
-        sh:path fiuba:hasPrincipioResponsabilidad ;
-        sh:minCount 1 ;
-        sh:message "PrincipioDeResponsabilidad|El subgrafo debe incluir al menos un nodo de Principio de Responsabilidad Civil o Penal." ;
-    ] ;
-    sh:property [
-        sh:path fiuba:hasMarcoEjercicio ;
-        sh:minCount 1 ;
-        sh:message "MarcoEjercicioProfesional|El subgrafo debe contener el marco de Colegiación e Incumbencias." ;
-    ] ;
-    sh:property [
-        sh:path fiuba:hasEticaProfesional ;
-        sh:minCount 1 ;
-        sh:message "EticaProfesional|El subgrafo debe contener al menos un nodo de Código de Ética Profesional." ;
+        sh:message "NormaVigente|El subgrafo debe conectar el hecho ingenieril con al menos una norma vigente cargada por el usuario en Neo4j." ;
     ] ;
     sh:property [
         sh:path fiuba:missingRequiredOPANode ;
         sh:maxCount 0 ;
-        sh:message "El subgrafo debe contener todos los nodos obligatorios exigidos por el fallo deóntico de OPA." ;
+        sh:message "OPARequired|El subgrafo debe contener todos los nodos obligatorios exigidos por el fallo deóntico de OPA." ;
     ] .
 
 # 3. Shape Post-Generación para Auditoría Epistémica de Trazabilidad de Citas

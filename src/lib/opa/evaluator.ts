@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs/promises';
 import os from 'os';
 import { APP_CONFIG } from '../config.ts';
+import type { OKFNode } from '../neo4j/client.ts';
 
 const execFileAsync = promisify(execFile);
 
@@ -66,8 +67,26 @@ export interface PolicyDecision {
   escenarios_contrafacticos: EscenarioContrafactico[];
 }
 
-export async function evaluarEnServidorOPA(hechos: HechosIngenieria): Promise<PolicyDecision> {
+export async function evaluarEnServidorOPA(
+  hechos: HechosIngenieria,
+  nodosCargados: OKFNode[] = []
+): Promise<PolicyDecision> {
   const start = Date.now();
+
+  const inputPayload = {
+    ...hechos,
+    nodos_cargados: nodosCargados.map((n) => ({
+      okf_id: n.okf_id,
+      title: n.title,
+      law_number: n.law_number,
+      article_number: n.article_number,
+      status: n.status,
+      especialidades_fiuba: n.especialidades_fiuba,
+      jurisdiction: n.jurisdiction,
+      shape_role: n.shape_role,
+      content: n.content,
+    })),
+  };
 
   // 1. Si se configuró OPA_SERVER_URL en .env, consulta el servidor REST de OPA
   if (APP_CONFIG.opa.serverUrl) {
@@ -76,7 +95,7 @@ export async function evaluarEnServidorOPA(hechos: HechosIngenieria): Promise<Po
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ input: hechos }),
+      body: JSON.stringify({ input: inputPayload }),
     });
     if (!response.ok) {
       throw new Error(`[OPA REST Error] HTTP ${response.status} al consultar ${url}`);
@@ -92,7 +111,7 @@ export async function evaluarEnServidorOPA(hechos: HechosIngenieria): Promise<Po
   );
 
   try {
-    await fs.writeFile(tmpFile, JSON.stringify(hechos), 'utf-8');
+    await fs.writeFile(tmpFile, JSON.stringify(inputPayload), 'utf-8');
 
     const { stdout } = await execFileAsync(APP_CONFIG.opa.binPath, [
       'eval',

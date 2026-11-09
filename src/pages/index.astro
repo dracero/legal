@@ -84,20 +84,9 @@ try {
           </p>
         </div>
         <div class="flex items-center gap-2">
-          <button
-            id="btn-demo-pdf-ingest"
-            type="button"
-            class="rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-500/25 cursor-pointer"
-          >
-            ⚡ Probar Ingesta Instantánea (Decreto 911/96 Construcción PDF)
-          </button>
-          <button
-            id="btn-demo-shacl-reject"
-            type="button"
-            class="rounded-lg border border-rose-500/40 bg-rose-500/15 px-3 py-1.5 text-xs font-semibold text-rose-300 transition hover:bg-rose-500/25 cursor-pointer"
-          >
-            🛡️ Probar Rechazo SHACL (Ley Derogada)
-          </button>
+          <span class="rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-1.5 text-xs text-slate-300">
+            Ingesta Dinámica de PDF del Usuario
+          </span>
         </div>
       </div>
 
@@ -200,6 +189,23 @@ try {
       <div id="pdf-upload-result" class="mt-3 hidden rounded-xl border border-slate-800 bg-slate-950/90 p-3.5 text-xs"></div>
     </section>
 
+    <!-- BANNER DE ESTADO VACÍO: Solo si no hay leyes cargadas -->
+    <div id="empty-catalog-banner" class:list={['mb-6 rounded-2xl border border-sky-500/30 bg-sky-950/25 p-5 shadow-lg', initialCatalog.nodes.length > 0 && 'hidden']}>
+      <div class="flex items-start gap-4">
+        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-500/20 text-sky-400">
+          <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <div>
+          <h3 class="text-sm font-bold text-white">Base de Conocimiento Vacía: Ingesta de Leyes en PDF Requerida</h3>
+          <p class="mt-1 text-xs text-slate-300">
+            El sistema opera en modo <strong>estricto</strong>: analiza <strong>únicamente las normas que usted cargue</strong>. Suba un archivo PDF legal desde el panel superior (por ejemplo, leyes de incumbencias, decretos de higiene y seguridad, o artículos normativos) para poblar el subgrafo en Neo4j y habilitar el pipeline determinista.
+          </p>
+        </div>
+      </div>
+    </div>
+
     <!-- GRILLA PRINCIPAL: IZQUIERDA (CASO + PIPELINE + DICTAMEN EXTENSO) | DERECHA (GRAFO NEO4J + OPA + SHACL) -->
     <div class="grid grid-cols-1 gap-6 xl:grid-cols-12">
       <!-- COLUMNA IZQUIERDA (7 cols): Consulta de Caso, Pipeline de 6 Agentes y Dictamen Extenso -->
@@ -210,29 +216,6 @@ try {
             <h2 class="text-sm font-bold uppercase tracking-wider text-sky-400">
               Planteo del Caso Clínico / Pericial de Ingeniería (FIUBA)
             </h2>
-            <div class="flex flex-wrap gap-1.5">
-              <button
-                type="button"
-                data-preset="civil-pba"
-                class="preset-btn rounded-md border border-slate-700 bg-slate-800/80 px-2.5 py-1 text-[11px] font-medium text-slate-200 transition hover:border-sky-500 hover:text-sky-300 cursor-pointer"
-              >
-                Caso 1: Civil en PBA (Ruina + Suelo Subcontratado)
-              </button>
-              <button
-                type="button"
-                data-preset="industrial-caba"
-                class="preset-btn rounded-md border border-slate-700 bg-slate-800/80 px-2.5 py-1 text-[11px] font-medium text-slate-200 transition hover:border-amber-500 hover:text-amber-300 cursor-pointer"
-              >
-                Caso 2: Industrial en CABA (Conflicto Alta Tensión)
-              </button>
-              <button
-                type="button"
-                data-preset="informatica-dependencia"
-                class="preset-btn rounded-md border border-slate-700 bg-slate-800/80 px-2.5 py-1 text-[11px] font-medium text-slate-200 transition hover:border-purple-500 hover:text-purple-300 cursor-pointer"
-              >
-                Caso 3: Informática BMS (Dependencia + Impropiedad)
-              </button>
-            </div>
           </div>
 
           <form id="dictamen-form" class="space-y-4">
@@ -271,8 +254,9 @@ try {
                 id="textarea-caso"
                 rows="4"
                 required
+                placeholder="Describa de forma detallada los hechos fácticos y técnicos del caso de ingeniería a dictaminar..."
                 class="w-full rounded-xl border border-slate-700 bg-slate-950 p-3.5 text-sm text-slate-100 placeholder-slate-500 focus:border-sky-500 focus:outline-none"
-              >Un ingeniero civil firma el cálculo estructural y la dirección de obra de una nave industrial en la Provincia de Buenos Aires, pero subcontrata el estudio geotécnico de suelos sin verificar la matrícula provincial del laboratorista. En el contrato incluyó una cláusula de limitación de responsabilidad por vicios del suelo. A los 3 años de la recepción definitiva cede una base principal comprometiendo la solidez del inmueble.</textarea>
+              ></textarea>
             </div>
 
             <div class="flex items-center justify-between gap-4">
@@ -624,33 +608,7 @@ try {
       btn.addEventListener('click', () => activateSideTab(btn.getAttribute('data-tab')));
     });
 
-    // 3. Casos Pre-cargados de Cátedra FIUBA
-    const PRESETS = {
-      'civil-pba': {
-        especialidad: 'Civil',
-        caso: 'Un ingeniero civil firma el cálculo estructural y la dirección de obra de una nave industrial en la Provincia de Buenos Aires, pero subcontrata el estudio geotécnico de suelos sin verificar la matrícula provincial del laboratorista. En el contrato incluyó una cláusula de limitación de responsabilidad por vicios del suelo. A los 3 años de la recepción definitiva cede una base principal comprometiendo la solidez del inmueble.',
-      },
-      'industrial-caba': {
-        especialidad: 'Industrial',
-        caso: 'Un ingeniero industrial matriculado únicamente en CPII proyecta, calcula y firma en CABA la instalación eléctrica de alta tensión (13.2 kV) y subestación transformadora de una planta fabril, sin intervención de un ingeniero electricista. Durante la puesta en marcha ocurre una falla de aislación y arco eléctrico que provoca lesiones graves a dos trabajadores.',
-      },
-      'informatica-dependencia': {
-        especialidad: 'Informatica',
-        caso: 'Un ingeniero en informática en relación de dependencia diseña e integra de forma permanente el sistema embebido de control edilicio y seguridad contra incendios (BMS) de un edificio inteligente en CABA. Por instrucción directa de su empleador para reducir costos, omite los lazos redundantes exigidos por la normativa técnica y a los 2 años el edificio resulta funcionalmente inoperable e impropio para su destino.',
-      },
-    };
-
-    document.querySelectorAll('.preset-btn').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const key = btn.getAttribute('data-preset');
-        const preset = PRESETS[key];
-        if (!preset) return;
-        document.getElementById('select-especialidad').value = preset.especialidad;
-        document.getElementById('textarea-caso').value = preset.caso;
-      });
-    });
-
-    // 4. Subida e Ingesta de Leyes por PDF (Con validación SHACL Pre-Ingesta)
+    // 3. Subida e Ingesta de Leyes por PDF (Con validación SHACL Pre-Ingesta)
     const pdfInput = document.getElementById('pdf-file-input');
     const pdfLabel = document.getElementById('pdf-file-label');
     const pdfForm = document.getElementById('pdf-upload-form');
@@ -673,6 +631,14 @@ try {
         currentGraphNodes = data.nodes || [];
         currentGraphEdges = data.edges || [];
         document.getElementById('header-node-count').textContent = String(currentGraphNodes.length);
+        const emptyBanner = document.getElementById('empty-catalog-banner');
+        if (emptyBanner) {
+          if (currentGraphNodes.length === 0) {
+            emptyBanner.classList.remove('hidden');
+          } else {
+            emptyBanner.classList.add('hidden');
+          }
+        }
         renderNeo4jGraph(currentGraphNodes, currentGraphEdges, currentGraphNodes[currentGraphNodes.length - 1]?.okf_id);
       }
     }
@@ -713,29 +679,12 @@ try {
       const file = pdfInput?.files?.[0];
 
       if (!file) {
-        // Si el usuario no seleccionó un archivo físico, enviamos un payload PDF sintético con los datos del formulario
-        const lawNumber = document.getElementById('pdf-law-number').value;
-        const jurisdiction = document.getElementById('pdf-jurisdiction').value;
-        const shapeRole = document.getElementById('pdf-shape-role').value;
-        const status = document.getElementById('pdf-status').value;
-
-        const res = await fetch('/api/laws/upload', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            fileName: `${lawNumber.toLowerCase().replace(/[^a-z0-9]+/g, '_')}.pdf`,
-            lawNumber,
-            jurisdiction,
-            shapeRole,
-            status,
-            category: 'Seguridad_E_Incumbencias',
-            especialidades: ['Civil', 'Industrial', 'Mecanica', 'Electricista', 'Quimica'],
-            rawPdfText: `ARTÍCULO 1°.- En toda obra en construcción regida por ${lawNumber} se deberá confeccionar un Legajo Técnico de Higiene y Seguridad rubricado por ingeniero matriculado con incumbencia verificada (concuerda con Ley 19.587 y Art. 1273 CCyCN).\nARTÍCULO 2°.- El Director de Obra y el responsable de Higiene y Seguridad deberán verificar la matrícula vigente de todo subcontratista conforme al Decreto-Ley 6070/58 y Ley 10.416, siendo nula toda cláusula de dispensa de orden público (Art. 1276 CCyCN).`,
-          }),
-        });
-        const data = await res.json();
-        renderPdfIngestionFeedback(data);
-        if (data.success) await refreshCatalogGraph();
+        pdfResultBox.classList.remove('hidden');
+        pdfResultBox.className = 'mt-3 rounded-xl border border-amber-500/40 bg-amber-950/30 p-3.5 text-xs text-amber-200';
+        pdfResultBox.innerHTML = `
+          <div class="font-bold text-amber-300">Seleccione un archivo PDF</div>
+          <p class="mt-1">Debe seleccionar un archivo PDF legal de su disco para que el sistema procese su ingesta atómica OKF y validación SHACL.</p>
+        `;
         return;
       }
 
@@ -747,50 +696,6 @@ try {
       const data = await res.json();
       renderPdfIngestionFeedback(data);
       if (data.success) await refreshCatalogGraph();
-    });
-
-    // Botón de demostración instantánea de subida de PDF válido
-    document.getElementById('btn-demo-pdf-ingest')?.addEventListener('click', async () => {
-      document.getElementById('pdf-status').value = 'Vigente';
-      document.getElementById('pdf-law-number').value = 'Decreto 911/96 (Higiene y Seguridad en la Construcción)';
-      const res = await fetch('/api/laws/upload', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fileName: 'decreto_911_96_construccion.pdf',
-          lawNumber: 'Decreto 911/96',
-          jurisdiction: 'Nacional',
-          shapeRole: 'NormaFondo',
-          status: 'Vigente',
-          category: 'Higiene_Y_Seguridad_Construccion',
-          especialidades: ['Civil', 'Industrial', 'Mecanica', 'Electricista'],
-          rawPdfText: `ARTÍCULO 13.- El empleador, el Comitente y el Director de Obra son solidaria y concurrentemente responsables del cumplimiento de las normas de seguridad en la construcción conforme a la Ley 19.587 y Art. 1274 CCyCN.\nARTÍCULO 20.- El Legajo Técnico de Higiene y Seguridad deberá estar rubricado por un Ingeniero con matrícula activa en el Consejo o Colegio de la jurisdicción (Decreto-Ley 6070/58 o Ley 10.416 PBA) y visado conforme al Código de Ética Decreto 1099/84.`,
-        }),
-      });
-      const data = await res.json();
-      renderPdfIngestionFeedback(data);
-      if (data.success) await refreshCatalogGraph();
-    });
-
-    // Botón de demostración de rechazo SHACL (Ley Derogada)
-    document.getElementById('btn-demo-shacl-reject')?.addEventListener('click', async () => {
-      document.getElementById('pdf-status').value = 'Historica';
-      const res = await fetch('/api/laws/upload', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fileName: 'codigo_civil_velez_art_1646_derogado.pdf',
-          lawNumber: 'Código Civil Vélez Sarsfield (Derogado)',
-          jurisdiction: 'Nacional',
-          shapeRole: 'NormaFondo',
-          status: 'Historica',
-          category: 'Norma_Derogada',
-          especialidades: ['Civil'],
-          rawPdfText: `ARTÍCULO 1646.- Tratándose de edificios u obras en inmuebles destinados a larga duración (Art. derogado por Ley 26.994 CCyCN).`,
-        }),
-      });
-      const data = await res.json();
-      renderPdfIngestionFeedback(data);
     });
 
     // Toggle del panel PDF
@@ -1011,6 +916,14 @@ try {
       const especialidadIngenieria = document.getElementById('select-especialidad').value;
       const btnSubmit = document.getElementById('btn-generar-dictamen');
 
+      if (currentGraphNodes.length === 0) {
+        statusBadge.textContent = 'Debe cargar al menos una ley en PDF desde el panel superior antes de ejecutar el análisis.';
+        viewer.innerHTML = '<div class="rounded-xl border border-amber-500/40 bg-amber-950/30 p-4 text-xs text-amber-200"><strong class="text-amber-300">Base de conocimiento vacía:</strong> Por favor suba un PDF normativo desde el panel superior. El sistema analizará estricta y exclusivamente las leyes que usted cargue.</div>';
+        const sec = document.getElementById('pdf-upload-section');
+        sec?.scrollIntoView({ behavior: 'smooth' });
+        return;
+      }
+
       btnSubmit.disabled = true;
       btnSubmit.classList.add('opacity-60');
       viewer.innerHTML = '';
@@ -1097,6 +1010,9 @@ try {
                   ev.payload
                 );
               }
+            } else if (msg.type === 'error') {
+              statusBadge.textContent = `Aviso: ${msg.data?.message || 'Error en el pipeline'}`;
+              viewer.innerHTML = `<div class="rounded-xl border border-rose-500/40 bg-rose-950/40 p-4 text-xs text-rose-200"><strong class="text-rose-300">Aviso del Sistema Neuro-Simbólico:</strong><p class="mt-1">${msg.data?.message || 'Error interno'}</p></div>`;
             } else if (msg.type === 'complete') {
               const finalData = msg.data;
               viewer.innerHTML = formatDictamenMarkdownToHtml(finalData.dictamenCompletoMarkdown);

@@ -289,8 +289,8 @@ export async function hybridRetrieveAndExpandSubgraph(options: {
           CALL db.index.fulltext.queryNodes($indexName, $luceneQuery)
           YIELD node, score
           WHERE node.status = 'Vigente'
-            AND ($especialidad IN node.especialidades_fiuba)
-            AND (node.jurisdiction = 'Nacional' OR node.jurisdiction = $jurisdiccion)
+            AND ($especialidad IN node.especialidades_fiuba OR 'Todas' IN node.especialidades_fiuba)
+            AND (node.jurisdiction = 'Nacional' OR node.jurisdiction = 'Todas' OR node.jurisdiction = $jurisdiccion)
           RETURN node, score
           ORDER BY score DESC
           LIMIT $k
@@ -322,8 +322,8 @@ export async function hybridRetrieveAndExpandSubgraph(options: {
         CALL db.index.vector.queryNodes($indexName, $k, $queryVector)
         YIELD node, score
         WHERE node.status = 'Vigente'
-          AND ($especialidad IN node.especialidades_fiuba)
-          AND (node.jurisdiction = 'Nacional' OR node.jurisdiction = $jurisdiccion)
+          AND ($especialidad IN node.especialidades_fiuba OR 'Todas' IN node.especialidades_fiuba)
+          AND (node.jurisdiction = 'Nacional' OR node.jurisdiction = 'Todas' OR node.jurisdiction = $jurisdiccion)
         RETURN node, score
         ORDER BY score DESC
         `,
@@ -374,6 +374,23 @@ export async function hybridRetrieveAndExpandSubgraph(options: {
             existing ? `${existing.retrieval_reason} + Directiva OPA` : 'Directiva Obligatoria OPA'
           )
         );
+      }
+    }
+
+    // Si tras BM25, Vector Search y OPA el subgrafo quedó vacío pero existen normas cargadas por el usuario,
+    // se incorporan las normas vigentes disponibles en Neo4j para analizar lo subido
+    if (nodeMap.size === 0) {
+      const allLoadedRes = await session.run(
+        `
+        MATCH (n:LegalOKF)
+        WHERE n.status = 'Vigente'
+        RETURN n
+        LIMIT 12
+        `
+      );
+      for (const rec of allLoadedRes.records) {
+        const props = rec.get('n').properties;
+        nodeMap.set(props.okf_id, recordToOKFNode(props, 0.85, 'Norma Cargada por el Usuario'));
       }
     }
 
@@ -471,7 +488,7 @@ export async function completarNodosFaltantesNeo4j(
         MATCH (n:LegalOKF)
         WHERE n.shape_role IN $missingShapeRoles
           AND n.status = 'Vigente'
-          AND (n.jurisdiction = 'Nacional' OR n.jurisdiction = $jurisdiccion)
+          AND (n.jurisdiction = 'Nacional' OR n.jurisdiction = 'Todas' OR n.jurisdiction = $jurisdiccion)
         RETURN n
         LIMIT 6
         `,

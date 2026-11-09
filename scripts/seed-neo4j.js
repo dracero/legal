@@ -19,7 +19,6 @@ const hfModel = process.env.HUGGINGFACE_EMBEDDING_MODEL || 'Xenova/all-MiniLM-L6
 let extractorInstance = null;
 async function getExtractor() {
   if (!extractorInstance) {
-    console.log(`[Hugging Face] Cargando modelo local de embeddings: ${hfModel}...`);
     extractorInstance = await pipeline('feature-extraction', hfModel);
   }
   return extractorInstance;
@@ -53,7 +52,7 @@ export async function seedDatabase() {
       break;
     } catch {
       await testSession.close();
-      console.log(`[Neo4j] Esperando que el motor Bolt en ${uri} esté listo (intento ${attempt}/20)...`);
+      console.log(`[Neo4j] Esperando conexión Bolt en ${uri} (intento ${attempt}/20)...`);
       await new Promise((r) => setTimeout(r, 1500));
     }
   }
@@ -65,7 +64,7 @@ export async function seedDatabase() {
 
   const session = driver.session();
   try {
-    console.log(`[Neo4j] Inicializando esquema y recreando índice vectorial de ${vectorDimensions} dimensiones (Hugging Face)...`);
+    // 1. Asegurar restricciones e índices limpios
     await session.run(
       `CREATE CONSTRAINT legal_okf_id_unique IF NOT EXISTS FOR (n:LegalOKF) REQUIRE n.okf_id IS UNIQUE`
     );
@@ -75,30 +74,44 @@ export async function seedDatabase() {
       FOR (n:LegalOKF) ON EACH [n.title, n.content, n.law_number, n.category, n.okf_id]
     `);
 
-    // Recrear el índice vectorial para garantizar cardinalidad exacta de 384 dimensiones
     try {
-      await session.run(`DROP INDEX ${vectorIndexName} IF EXISTS`);
+      await session.run(`
+        CREATE VECTOR INDEX ${vectorIndexName} IF NOT EXISTS
+        FOR (n:LegalOKF) ON (n.embedding)
+        OPTIONS {
+          indexConfig: {
+            \`vector.similarity_function\`: 'cosine',
+            \`vector.dimensions\`: ${vectorDimensions}
+          }
+        }
+      `);
     } catch {
-      // Ignorar si no existía
+      await session.run(`DROP INDEX ${vectorIndexName} IF EXISTS`);
+      await session.run(`
+        CREATE VECTOR INDEX ${vectorIndexName} IF NOT EXISTS
+        FOR (n:LegalOKF) ON (n.embedding)
+        OPTIONS {
+          indexConfig: {
+            \`vector.similarity_function\`: 'cosine',
+            \`vector.dimensions\`: ${vectorDimensions}
+          }
+        }
+      `);
     }
 
-    await session.run(`
-      CREATE VECTOR INDEX ${vectorIndexName} IF NOT EXISTS
-      FOR (n:LegalOKF) ON (n.embedding)
-      OPTIONS {
-        indexConfig: {
-          \`vector.similarity_function\`: 'cosine',
-          \`vector.dimensions\`: ${vectorDimensions}
-        }
-      }
-    `);
+    // 2. Sincronizar ÚNICAMENTE los archivos subidos por el usuario que existan en el directorio OKF
+    await fs.mkdir(OKF_DIR, { recursive: true });
+    const files = (await fs.readdir(OKF_DIR)).filter((f) => f.endsWith('.md'));
 
-    const files = await fs.readdir(OKF_DIR);
+    if (files.length === 0) {
+      console.log(`[Neo4j] Base de conocimiento inicializada vacía (0 normas). Se indexarán solo los PDFs que subas desde el frontend.`);
+      return;
+    }
+
+    console.log(`[Neo4j] Sincronizando ${files.length} normas cargadas por el usuario...`);
     const parsedNodes = [];
 
-    console.log(`[Neo4j] Generando embeddings con Hugging Face (${hfModel}) para ${files.length} archivos OKF...`);
     for (const file of files) {
-      if (!file.endsWith('.md')) continue;
       const raw = await fs.readFile(path.join(OKF_DIR, file), 'utf-8');
       const { data, content } = matter(raw);
       if (!data.okf_id) continue;
@@ -115,7 +128,7 @@ export async function seedDatabase() {
         category: String(data.category || ''),
         jurisdiction: String(data.jurisdiction || ''),
         especialidades_fiuba: Array.isArray(data.especialidades_fiuba) ? data.especialidades_fiuba : [],
-        status: String(data.status || ''),
+        status: String(data.status || 'Vigente'),
         last_updated: String(data.last_updated || ''),
         content: content.trim(),
         relations: Array.isArray(data.relations) ? data.relations : [],
@@ -182,7 +195,7 @@ export async function seedDatabase() {
     }
 
     console.log(
-      `[Neo4j] ✓ Sincronizados ${parsedNodes.length} nodos OKF atómicos con embeddings Hugging Face (${vectorDimensions} dims) y ${edgeCount} aristas normativas en ${uri}.`
+      `[Neo4j] ✓ Sincronizados ${parsedNodes.length} nodos OKF y ${edgeCount} aristas normativas cargadas por el usuario.`
     );
   } finally {
     await session.close();
