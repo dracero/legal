@@ -1,0 +1,39 @@
+{
+  "name": "fiuba-legal-neurosymbolic",
+  "type": "module",
+  "version": "1.0.0",
+  "description": "Sistema Neuro-Simbólico de Ingeniería Legal y Ejercicio Profesional (FIUBA) - Astro + Genkit + Neo4j + OKF + OPA + SHACL",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.js",
+    "dev:astro": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "db:logs": "docker compose logs -f neo4j",
+    "db:seed": "node scripts/seed-neo4j.js",
+    "opa:test": "node scripts/opa-test.js"
+  },
+  "dependencies": {
+    "@astrojs/node": "^9.5.4",
+    "@google/genai": "^1.41.0",
+    "@huggingface/inference": "^4.13.32",
+    "@tailwindcss/vite": "^4.1.11",
+    "@xenova/transformers": "^2.17.2",
+    "astro": "^5.16.6",
+    "dotenv": "^16.5.0",
+    "gray-matter": "^4.0.3",
+    "marked": "^15.0.12",
+    "n3": "^1.26.0",
+    "neo4j-driver": "^5.28.1",
+    "pdf-parse": "^1.1.1",
+    "rdf-ext": "^2.5.2",
+    "rdf-validate-shacl": "^0.6.5",
+    "tailwindcss": "^4.1.11",
+    "zod": "^3.25.67"
+  }
+}

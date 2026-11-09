@@ -1,0 +1,1125 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { getAllCatalogOKFNodes } from '../lib/neo4j/client';
+import { CONFIGURED_GEMINI_MODEL } from '../lib/gemini/agent';
+import { APP_CONFIG } from '../lib/config';
+
+let initialCatalog = { nodes: [], edges: [] };
+try {
+  initialCatalog = await getAllCatalogOKFNodes();
+} catch (e) {
+  console.warn('[Index SSR] Neo4j catalog aún inicializando:', e);
+}
+---
+
+<Layout title="FIUBA Ingeniería Legal | Arquitectura Neuro-Simbólica (OKF + Neo4j + OPA + SHACL + Gemini)">
+  <!-- Header Institucional -->
+  <header class="sticky top-0 z-30 border-b border-slate-800/80 bg-[#0b1120]/90 backdrop-blur-md">
+    <div class="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-4 px-6 py-3.5">
+      <div class="flex items-center gap-3.5">
+        <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-indigo-600 font-bold text-white shadow-lg shadow-sky-500/20">
+          FIUBA
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-base font-bold tracking-tight text-white sm:text-lg">
+              Sistema Neuro-Simbólico de Ingeniería Legal y Ejercicio Profesional
+            </h1>
+            <span class="rounded-full border border-sky-500/40 bg-sky-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-sky-300">
+              v2026.11
+            </span>
+          </div>
+          <p class="text-xs text-slate-400">
+            Cátedra Todas las Especialidades FIUBA • Google OKF + Neo4j Vectorial (Hugging Face {APP_CONFIG.huggingface.model}) + OPA (Rego v1) + W3C SHACL + Gemini {CONFIGURED_GEMINI_MODEL}
+          </p>
+        </div>
+      </div>
+
+      <!-- Indicadores de Estado de los Motores -->
+      <div class="flex flex-wrap items-center gap-2 text-xs">
+        <span class="flex items-center gap-1.5 rounded-lg border border-sky-500/30 bg-sky-500/10 px-2.5 py-1 text-sky-300">
+          <span class="h-2 w-2 rounded-full bg-sky-400"></span>
+          HF Embeddings: <strong>{APP_CONFIG.huggingface.model}</strong> ({APP_CONFIG.huggingface.dimensions}d)
+        </span>
+        <span class="flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-emerald-300">
+          <span class="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          Neo4j 5.20 (:7688) • <strong id="header-node-count">{initialCatalog.nodes.length}</strong> Nodos OKF
+        </span>
+        <span class="flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-amber-300">
+          <span class="h-2 w-2 rounded-full bg-amber-400"></span>
+          OPA Rego v1.22
+        </span>
+        <span class="flex items-center gap-1.5 rounded-lg border border-purple-500/30 bg-purple-500/10 px-2.5 py-1 text-purple-300">
+          <span class="h-2 w-2 rounded-full bg-purple-400"></span>
+          W3C SHACL
+        </span>
+        <button
+          id="btn-toggle-pdf-panel"
+          type="button"
+          class="flex items-center gap-1.5 rounded-lg bg-sky-600 px-3 py-1.5 font-semibold text-white shadow-sm transition hover:bg-sky-500 cursor-pointer"
+        >
+          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+          </svg>
+          Subir Ley en PDF (OKF + SHACL)
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="mx-auto max-w-[1600px] px-4 py-5 sm:px-6">
+    <!-- PANEL DESPLEGABLE DE INGESTA DE LEYES POR PDF (Pre-Validada con SHACL -> OKF -> Neo4j) -->
+    <section
+      id="pdf-upload-section"
+      class="mb-6 rounded-2xl border border-sky-500/30 bg-gradient-to-b from-slate-900/95 to-slate-950/95 p-5 shadow-xl shadow-sky-950/20"
+    >
+      <div class="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+        <div>
+          <h2 class="flex items-center gap-2 text-base font-bold text-white">
+            <span class="flex h-6 w-6 items-center justify-center rounded-md bg-sky-500/20 text-xs text-sky-400">PDF</span>
+            Ingesta Atómica de Leyes, Decretos e Incumbencias desde PDF (Estándar Google OKF + Compuerta Pre-Ingesta SHACL)
+          </h2>
+          <p class="text-xs text-slate-400">
+            En lugar de fragmentar PDFs a ciegas (chunking), el parser desglosa cada Artículo con todos sus incisos como una unidad OKF atómica, la valida contra <code>fiuba:OKFNodeShape</code> en SHACL e indexa sus vectores y aristas en Neo4j.
+          </p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button
+            id="btn-demo-pdf-ingest"
+            type="button"
+            class="rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-500/25 cursor-pointer"
+          >
+            ⚡ Probar Ingesta Instantánea (Decreto 911/96 Construcción PDF)
+          </button>
+          <button
+            id="btn-demo-shacl-reject"
+            type="button"
+            class="rounded-lg border border-rose-500/40 bg-rose-500/15 px-3 py-1.5 text-xs font-semibold text-rose-300 transition hover:bg-rose-500/25 cursor-pointer"
+          >
+            🛡️ Probar Rechazo SHACL (Ley Derogada)
+          </button>
+        </div>
+      </div>
+
+      <form id="pdf-upload-form" class="grid grid-cols-1 gap-4 lg:grid-cols-12">
+        <!-- Selector de archivo PDF -->
+        <div class="lg:col-span-4">
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
+            Archivo PDF de la Norma Legal
+          </label>
+          <label
+            for="pdf-file-input"
+            class="flex h-28 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-700 bg-slate-900/70 px-4 text-center transition hover:border-sky-500/60 hover:bg-slate-900"
+          >
+            <svg class="mb-1.5 h-7 w-7 text-sky-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <span id="pdf-file-label" class="text-xs font-medium text-slate-200">
+              Seleccionar o arrastrar PDF de Ley / Resolución (.pdf)
+            </span>
+            <span class="mt-0.5 text-[11px] text-slate-400">Desglose automático por Artículo + Incisos</span>
+            <input id="pdf-file-input" name="file" type="file" accept=".pdf,application/pdf" class="hidden" />
+          </label>
+        </div>
+
+        <!-- Metadatos Ontológicos OKF -->
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:col-span-6">
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Cuerpo Normativo / Número de Ley</label>
+            <input
+              id="pdf-law-number"
+              name="lawNumber"
+              type="text"
+              placeholder="Ej: Decreto 911/96 o Ley 13.660"
+              required
+              value="Decreto 911/96 (Seguridad en la Construcción)"
+              class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-white focus:border-sky-500 focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Jurisdicción Territorial (SHACL)</label>
+            <select
+              id="pdf-jurisdiction"
+              name="jurisdiction"
+              class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-white focus:border-sky-500 focus:outline-none"
+            >
+              <option value="Nacional">Nacional (Argentina / Federal)</option>
+              <option value="CABA">CABA (Ciudad Autónoma de Bs. As.)</option>
+              <option value="PBA">PBA (Provincia de Buenos Aires)</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Rol Ontológico (Shape SHACL)</label>
+            <select
+              id="pdf-shape-role"
+              name="shapeRole"
+              class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-white focus:border-sky-500 focus:outline-none"
+            >
+              <option value="NormaFondo">NormaFondo (CCyCN / HyS / LCT)</option>
+              <option value="PrincipioDeResponsabilidad">PrincipioDeResponsabilidad (Civil / Penal)</option>
+              <option value="MarcoEjercicioProfesional">MarcoEjercicioProfesional (Colegios / Incumbencias)</option>
+              <option value="EticaProfesional">EticaProfesional (Código de Ética)</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Estado de Vigencia (Filtro SHACL)</label>
+            <select
+              id="pdf-status"
+              name="status"
+              class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-white focus:border-sky-500 focus:outline-none"
+            >
+              <option value="Vigente">Vigente (Admitida en Índice Activo)</option>
+              <option value="Historica">Derogada / Histórica (Rechazada por SHACL)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Botón de acción -->
+        <div class="flex flex-col justify-end lg:col-span-2">
+          <input
+            id="pdf-especialidades"
+            name="especialidades"
+            type="hidden"
+            value="Civil,Industrial,Mecanica,Electricista,Quimica,Informatica,Electronica"
+          />
+          <button
+            id="btn-submit-pdf"
+            type="submit"
+            class="flex h-20 w-full flex-col items-center justify-center rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-sky-600/20 transition hover:from-sky-500 hover:to-indigo-500 cursor-pointer"
+          >
+            <span>Procesar PDF a OKF</span>
+            <span class="mt-0.5 text-[10px] font-normal text-sky-100">Validar SHACL + Ingestar Neo4j</span>
+          </button>
+        </div>
+      </form>
+
+      <!-- Resultado de la Ingesta PDF -->
+      <div id="pdf-upload-result" class="mt-3 hidden rounded-xl border border-slate-800 bg-slate-950/90 p-3.5 text-xs"></div>
+    </section>
+
+    <!-- GRILLA PRINCIPAL: IZQUIERDA (CASO + PIPELINE + DICTAMEN EXTENSO) | DERECHA (GRAFO NEO4J + OPA + SHACL) -->
+    <div class="grid grid-cols-1 gap-6 xl:grid-cols-12">
+      <!-- COLUMNA IZQUIERDA (7 cols): Consulta de Caso, Pipeline de 6 Agentes y Dictamen Extenso -->
+      <div class="space-y-6 xl:col-span-7">
+        <!-- TARJETA DE ENTRADA DEL CASO DE INGENIERÍA -->
+        <div class="rounded-2xl border border-slate-800 bg-slate-900/75 p-5 shadow-lg">
+          <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 class="text-sm font-bold uppercase tracking-wider text-sky-400">
+              Planteo del Caso Clínico / Pericial de Ingeniería (FIUBA)
+            </h2>
+            <div class="flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                data-preset="civil-pba"
+                class="preset-btn rounded-md border border-slate-700 bg-slate-800/80 px-2.5 py-1 text-[11px] font-medium text-slate-200 transition hover:border-sky-500 hover:text-sky-300 cursor-pointer"
+              >
+                Caso 1: Civil en PBA (Ruina + Suelo Subcontratado)
+              </button>
+              <button
+                type="button"
+                data-preset="industrial-caba"
+                class="preset-btn rounded-md border border-slate-700 bg-slate-800/80 px-2.5 py-1 text-[11px] font-medium text-slate-200 transition hover:border-amber-500 hover:text-amber-300 cursor-pointer"
+              >
+                Caso 2: Industrial en CABA (Conflicto Alta Tensión)
+              </button>
+              <button
+                type="button"
+                data-preset="informatica-dependencia"
+                class="preset-btn rounded-md border border-slate-700 bg-slate-800/80 px-2.5 py-1 text-[11px] font-medium text-slate-200 transition hover:border-purple-500 hover:text-purple-300 cursor-pointer"
+              >
+                Caso 3: Informática BMS (Dependencia + Impropiedad)
+              </button>
+            </div>
+          </div>
+
+          <form id="dictamen-form" class="space-y-4">
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-12">
+              <div class="sm:col-span-4">
+                <label class="block text-xs font-semibold text-slate-300 mb-1">
+                  Especialidad FIUBA del Profesional
+                </label>
+                <select
+                  id="select-especialidad"
+                  class="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-xs font-medium text-white focus:border-sky-500 focus:outline-none"
+                >
+                  <option value="Civil">Ingeniería Civil</option>
+                  <option value="Industrial">Ingeniería Industrial</option>
+                  <option value="Informatica">Ingeniería en Informática</option>
+                  <option value="Electronica">Ingeniería Electrónica</option>
+                  <option value="Mecanica">Ingeniería Mecánica</option>
+                  <option value="Electricista">Ingeniería Electricista</option>
+                  <option value="Quimica">Ingeniería Química</option>
+                  <option value="Naval">Ingeniería Naval y Mecánica</option>
+                </select>
+              </div>
+
+              <div class="sm:col-span-8 flex items-end">
+                <div class="w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3.5 py-2 text-[11px] text-slate-400">
+                  <strong class="text-slate-200">Restricción Simbólica Activa:</strong> Sin parámetros de muestreo deprecados (<code>temperature/top_p</code> eliminados en API 3.6+). El determinismo proviene de esquemas <strong>Zod</strong>, políticas <strong>OPA (Rego)</strong> y validación <strong>SHACL</strong> sobre <strong>Neo4j</strong>.
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">
+                Descripción Fáctica del Caso a Dictaminar
+              </label>
+              <textarea
+                id="textarea-caso"
+                rows="4"
+                required
+                class="w-full rounded-xl border border-slate-700 bg-slate-950 p-3.5 text-sm text-slate-100 placeholder-slate-500 focus:border-sky-500 focus:outline-none"
+              >Un ingeniero civil firma el cálculo estructural y la dirección de obra de una nave industrial en la Provincia de Buenos Aires, pero subcontrata el estudio geotécnico de suelos sin verificar la matrícula provincial del laboratorista. En el contrato incluyó una cláusula de limitación de responsabilidad por vicios del suelo. A los 3 años de la recepción definitiva cede una base principal comprometiendo la solidez del inmueble.</textarea>
+            </div>
+
+            <div class="flex items-center justify-between gap-4">
+              <div id="pipeline-status-badge" class="text-xs text-slate-400">
+                Listo para ejecutar el Grafo de Flujos Determinista (6 etapas).
+              </div>
+              <button
+                id="btn-generar-dictamen"
+                type="submit"
+                class="flex items-center gap-2 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-white shadow-lg shadow-sky-500/25 transition hover:from-sky-400 hover:to-indigo-500 cursor-pointer"
+              >
+                <span>Ejecutar Pipeline Neuro-Simbólico</span>
+                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- TRAZABILIDAD EN VIVO DE LAS 6 ETAPAS DEL GRAFO DETERMINISTA EN GENKIT -->
+        <div class="rounded-2xl border border-slate-800 bg-slate-900/75 p-5 shadow-lg">
+          <div class="mb-3 flex items-center justify-between">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">
+              Orquestación Multi-Agente Determinista (6 Compuertas Neuro-Simbólicas)
+            </h3>
+            <span id="active-model-pill" class="rounded-md bg-slate-800 px-2 py-0.5 font-mono text-[11px] text-sky-300">
+              Modelo: {CONFIGURED_GEMINI_MODEL}
+            </span>
+          </div>
+
+          <div id="pipeline-steps-grid" class="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+            <div data-step-card="1" class="rounded-xl border border-slate-800 bg-slate-950/80 p-3 transition">
+              <div class="flex items-center justify-between text-xs font-bold text-slate-300">
+                <span>1. FactExtractorFlow</span>
+                <span class="step-badge rounded bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-400">Pendiente</span>
+              </div>
+              <p class="step-detail mt-1 text-[11px] text-slate-400">Extracción Zod: Rama FIUBA, Rol, Jurisdicción y Figuras.</p>
+            </div>
+
+            <div data-step-card="2" class="rounded-xl border border-slate-800 bg-slate-950/80 p-3 transition">
+              <div class="flex items-center justify-between text-xs font-bold text-slate-300">
+                <span>2. Motor Deóntico OPA</span>
+                <span class="step-badge rounded bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-400">Pendiente</span>
+              </div>
+              <p class="step-detail mt-1 text-[11px] text-slate-400">Evalúa Rego v1: Incumbencias, Ley 10.416 / Dec. 6070 y Kelsen.</p>
+            </div>
+
+            <div data-step-card="3" class="rounded-xl border border-slate-800 bg-slate-950/80 p-3 transition">
+              <div class="flex items-center justify-between text-xs font-bold text-slate-300">
+                <span>3. HybridGraphRetriever</span>
+                <span class="step-badge rounded bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-400">Pendiente</span>
+              </div>
+              <p class="step-detail mt-1 text-[11px] text-slate-400">Neo4j HF Vector ({APP_CONFIG.huggingface.model}) + BM25 + Expansión Cypher a 2 saltos OKF.</p>
+            </div>
+
+            <div data-step-card="4" class="rounded-xl border border-slate-800 bg-slate-950/80 p-3 transition">
+              <div class="flex items-center justify-between text-xs font-bold text-slate-300">
+                <span>4. Validador SHACL</span>
+                <span class="step-badge rounded bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-400">Pendiente</span>
+              </div>
+              <p class="step-detail mt-1 text-[11px] text-slate-400">Verifica LegalAnalysisShape y ejecuta autorreparación Cypher.</p>
+            </div>
+
+            <div data-step-card="5" class="rounded-xl border border-slate-800 bg-slate-950/80 p-3 transition">
+              <div class="flex items-center justify-between text-xs font-bold text-slate-300">
+                <span>5. Agente Exégeta (I-IV)</span>
+                <span class="step-badge rounded bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-400">Pendiente</span>
+              </div>
+              <p class="step-detail mt-1 text-[11px] text-slate-400">Redacción iterativa extensa por capítulos guiada por el grafo.</p>
+            </div>
+
+            <div data-step-card="6" class="rounded-xl border border-slate-800 bg-slate-950/80 p-3 transition">
+              <div class="flex items-center justify-between text-xs font-bold text-slate-300">
+                <span>6. Auditor Epistémico</span>
+                <span class="step-badge rounded bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-400">Pendiente</span>
+              </div>
+              <p class="step-detail mt-1 text-[11px] text-slate-400">Verifica trazabilidad de citas OKF contra subgrafo Neo4j.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- VISOR DEL DICTAMEN LEGAL-INGENIERIL EXTENSO (STREAMING SECCIÓN POR SECCIÓN) -->
+        <div class="rounded-2xl border border-slate-800 bg-slate-900/90 p-6 shadow-xl">
+          <div class="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+            <div>
+              <h2 class="text-base font-bold text-white">
+                Dictamen Académico y Pericial de Ingeniería Legal (FIUBA)
+              </h2>
+              <p id="dictamen-subtitle" class="text-xs text-slate-400">
+                Generación iterativa seccionada anclada en Nodos OKF vigentes y directivas deterministas OPA.
+              </p>
+            </div>
+            <div class="flex items-center gap-2">
+              <span id="dictamen-char-counter" class="rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-1 font-mono text-xs text-sky-300">
+                0 palabras
+              </span>
+            </div>
+          </div>
+
+          <div id="dictamen-viewer" class="dictamen-prose min-h-[420px] text-sm text-slate-200">
+            <div class="flex h-72 flex-col items-center justify-center text-center text-slate-400">
+              <p class="text-sm font-medium text-slate-300">
+                Presione "Ejecutar Pipeline Neuro-Simbólico" para iniciar la evaluación deóntica y la exégesis extensa por secciones.
+              </p>
+              <p class="mt-1 max-w-md text-xs text-slate-400">
+                Cada cita normativa <code>[norma-...]</code> generada en el dictamen es interactiva y está vinculada en vivo al subgrafo de Neo4j del panel derecho.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- COLUMNA DERECHA (5 cols): PANEL LATERAL DE GRAFO NEO4J, REGLAS OPA Y REPORTE SHACL -->
+      <div class="space-y-6 xl:col-span-5">
+        <div class="sticky top-20 rounded-2xl border border-slate-800 bg-slate-900/85 p-5 shadow-xl">
+          <!-- Pestañas del Panel Lateral -->
+          <div class="mb-4 flex rounded-xl bg-slate-950 p-1 text-xs font-semibold">
+            <button
+              type="button"
+              data-tab="tab-graph"
+              class="side-tab-btn flex-1 rounded-lg bg-sky-600 py-2 text-white transition cursor-pointer"
+            >
+              Grafo Neo4j OKF (<span id="tab-graph-count">{initialCatalog.nodes.length}</span>)
+            </button>
+            <button
+              type="button"
+              data-tab="tab-opa"
+              class="side-tab-btn flex-1 rounded-lg py-2 text-slate-400 hover:text-white transition cursor-pointer"
+            >
+              Fallo OPA (Rego)
+            </button>
+            <button
+              type="button"
+              data-tab="tab-shacl"
+              class="side-tab-btn flex-1 rounded-lg py-2 text-slate-400 hover:text-white transition cursor-pointer"
+            >
+              SHACL & Auditoría
+            </button>
+          </div>
+
+          <!-- TAB 1: GRAFO INTERACTIVO NEO4J + INSPECTOR DE NODOS OKF -->
+          <div id="tab-graph" class="side-tab-pane space-y-4">
+            <div class="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="flex items-center gap-1"><span class="h-2.5 w-2.5 rounded-full bg-sky-400"></span> NormaFondo</span>
+                <span class="flex items-center gap-1"><span class="h-2.5 w-2.5 rounded-full bg-rose-400"></span> Responsabilidad</span>
+                <span class="flex items-center gap-1"><span class="h-2.5 w-2.5 rounded-full bg-amber-400"></span> Ejercicio/Incumbencia</span>
+                <span class="flex items-center gap-1"><span class="h-2.5 w-2.5 rounded-full bg-emerald-400"></span> Ética</span>
+              </div>
+              <span class="font-mono text-[10px] text-slate-400">Click en un nodo para inspeccionar</span>
+            </div>
+
+            <!-- Lienzo SVG del Subgrafo de Conocimiento Legal -->
+            <div class="relative overflow-hidden rounded-xl border border-slate-800 bg-[#060911]">
+              <svg id="neo4j-graph-svg" viewBox="0 0 600 380" class="h-[340px] w-full select-none"></svg>
+            </div>
+
+            <!-- Inspector del Nodo OKF Seleccionado -->
+            <div id="okf-node-inspector" class="rounded-xl border border-slate-800 bg-slate-950 p-4 text-xs">
+              <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                <span id="inspector-okf-id" class="font-mono font-bold text-sky-400">norma-ccycn-art-1273</span>
+                <span id="inspector-shape-role" class="rounded bg-sky-500/20 px-2 py-0.5 text-[10px] font-semibold text-sky-300">
+                  NormaFondo
+                </span>
+              </div>
+              <h4 id="inspector-title" class="mt-2 font-bold text-white">
+                Seleccione cualquier nodo del grafo superior o cita del dictamen para inspeccionar su entrada OKF atómica.
+              </h4>
+              <p id="inspector-meta" class="mt-1 text-[11px] text-slate-400"></p>
+              <pre id="inspector-content" class="mt-2.5 max-h-48 overflow-y-auto whitespace-pre-wrap rounded-lg bg-slate-900/90 p-3 font-sans text-xs text-slate-300"></pre>
+            </div>
+          </div>
+
+          <!-- TAB 2: MOTOR DEÓNTICO OPA (REGO V1) -->
+          <div id="tab-opa" class="side-tab-pane hidden space-y-4 text-xs">
+            <div id="opa-decision-container" class="space-y-3">
+              <div class="rounded-xl border border-slate-800 bg-slate-950 p-4 text-slate-400">
+                Ejecute un dictamen para visualizar las reglas Rego activadas, nulidades de orden público (Art. 1276 CCyCN), conflictos de incumbencias y la Pirámide de Kelsen.
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 3: VALIDADOR ONTOLÓGICO SHACL & AUDITORÍA EPISTÉMICA -->
+          <div id="tab-shacl" class="side-tab-pane hidden space-y-4 text-xs">
+            <div id="shacl-report-container" class="space-y-3">
+              <div class="rounded-xl border border-slate-800 bg-slate-950 p-4 text-slate-400">
+                Ejecute un dictamen para inspeccionar el reporte W3C SHACL (<code>fiuba:LegalAnalysisShape</code>), las tripletas RDF en formato Turtle y la auditoría epistémica de citas post-generación.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script define:vars={{ initialCatalog }}>
+    // Estado global en el cliente
+    let currentGraphNodes = initialCatalog.nodes || [];
+    let currentGraphEdges = initialCatalog.edges || [];
+    let selectedNodeId = currentGraphNodes[0]?.okf_id || null;
+
+    const ROLE_COLORS = {
+      NormaFondo: '#38bdf8',
+      PrincipioDeResponsabilidad: '#fb7185',
+      MarcoEjercicioProfesional: '#fbbf24',
+      EticaProfesional: '#34d399',
+    };
+
+    // 1. Renderizador del Grafo SVG de Neo4j
+    function renderNeo4jGraph(nodes, edges, highlightId = null) {
+      const svg = document.getElementById('neo4j-graph-svg');
+      if (!svg) return;
+      svg.innerHTML = '';
+
+      const countEl = document.getElementById('tab-graph-count');
+      if (countEl) countEl.textContent = String(nodes.length);
+
+      if (!nodes || nodes.length === 0) return;
+
+      const width = 600;
+      const height = 380;
+      const cx = width / 2;
+      const cy = height / 2;
+
+      // Posicionamiento en dos anillos concéntricos para máxima legibilidad de aristas
+      const positions = new Map();
+      nodes.forEach((node, idx) => {
+        const isInner = idx < 5;
+        const ringCount = isInner ? Math.min(5, nodes.length) : Math.max(1, nodes.length - 5);
+        const ringIndex = isInner ? idx : idx - 5;
+        const radius = isInner ? 82 : 152;
+        const angle = (2 * Math.PI * ringIndex) / ringCount - Math.PI / 2;
+        positions.set(node.okf_id, {
+          x: cx + radius * Math.cos(angle),
+          y: cy + radius * Math.sin(angle),
+          node,
+        });
+      });
+
+      // Definición de marcador de flecha para aristas dirigidas
+      const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+      defs.innerHTML = `
+        <marker id="arrow" viewBox="0 0 10 10" refX="22" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569" />
+        </marker>
+      `;
+      svg.appendChild(defs);
+
+      // Dibujar aristas
+      edges.forEach((edge) => {
+        const src = positions.get(edge.source);
+        const dst = positions.get(edge.target);
+        if (!src || !dst) return;
+
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', String(src.x));
+        line.setAttribute('y1', String(src.y));
+        line.setAttribute('x2', String(dst.x));
+        line.setAttribute('y2', String(dst.y));
+        line.setAttribute('stroke', highlightId && (edge.source === highlightId || edge.target === highlightId) ? '#38bdf8' : '#334155');
+        line.setAttribute('stroke-width', highlightId && (edge.source === highlightId || edge.target === highlightId) ? '2' : '1.2');
+        line.setAttribute('marker-end', 'url(#arrow)');
+        svg.appendChild(line);
+      });
+
+      // Dibujar nodos
+      positions.forEach(({ x, y, node }) => {
+        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        g.setAttribute('class', 'cursor-pointer transition-transform');
+        const isSelected = node.okf_id === (highlightId || selectedNodeId);
+        const color = ROLE_COLORS[node.shape_role] || '#38bdf8';
+
+        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        circle.setAttribute('cx', String(x));
+        circle.setAttribute('cy', String(y));
+        circle.setAttribute('r', isSelected ? '16' : '12');
+        circle.setAttribute('fill', '#0f172a');
+        circle.setAttribute('stroke', color);
+        circle.setAttribute('stroke-width', isSelected ? '3.5' : '2');
+        g.appendChild(circle);
+
+        const shortLabel = node.okf_id
+          .replace(/^norma-/, '')
+          .replace(/^ccycn-/, '')
+          .slice(0, 14);
+
+        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        text.setAttribute('x', String(x));
+        text.setAttribute('y', String(y + 26));
+        text.setAttribute('text-anchor', 'middle');
+        text.setAttribute('fill', isSelected ? '#ffffff' : '#94a3b8');
+        text.setAttribute('font-size', isSelected ? '10.5' : '9.5');
+        text.setAttribute('font-weight', isSelected ? '700' : '500');
+        text.textContent = shortLabel;
+        g.appendChild(text);
+
+        g.addEventListener('click', () => {
+          selectedNodeId = node.okf_id;
+          inspectOKFNode(node);
+          renderNeo4jGraph(currentGraphNodes, currentGraphEdges, node.okf_id);
+        });
+
+        svg.appendChild(g);
+      });
+
+      if (highlightId) {
+        const found = nodes.find((n) => n.okf_id === highlightId);
+        if (found) inspectOKFNode(found);
+      } else if (nodes[0]) {
+        inspectOKFNode(nodes.find((n) => n.okf_id === selectedNodeId) || nodes[0]);
+      }
+    }
+
+    function inspectOKFNode(node) {
+      if (!node) return;
+      document.getElementById('inspector-okf-id').textContent = node.okf_id;
+      document.getElementById('inspector-shape-role').textContent = node.shape_role;
+      document.getElementById('inspector-title').textContent = node.title;
+      document.getElementById('inspector-meta').textContent =
+        `${node.law_number} (${node.article_number}) • Jurisdicción: ${node.jurisdiction} • Estado: ${node.status} • Vía: ${node.retrieval_reason || 'Grafo OKF'}`;
+      document.getElementById('inspector-content').textContent = node.content;
+    }
+
+    // Inicializar grafo con el catálogo inicial
+    renderNeo4jGraph(currentGraphNodes, currentGraphEdges);
+
+    // 2. Manejo de Pestañas del Panel Lateral
+    const tabBtns = document.querySelectorAll('.side-tab-btn');
+    const tabPanes = document.querySelectorAll('.side-tab-pane');
+
+    function activateSideTab(tabId) {
+      tabBtns.forEach((btn) => {
+        const active = btn.getAttribute('data-tab') === tabId;
+        btn.className = active
+          ? 'side-tab-btn flex-1 rounded-lg bg-sky-600 py-2 text-white transition cursor-pointer'
+          : 'side-tab-btn flex-1 rounded-lg py-2 text-slate-400 hover:text-white transition cursor-pointer';
+      });
+      tabPanes.forEach((pane) => {
+        if (pane.id === tabId) {
+          pane.classList.remove('hidden');
+        } else {
+          pane.classList.add('hidden');
+        }
+      });
+    }
+
+    tabBtns.forEach((btn) => {
+      btn.addEventListener('click', () => activateSideTab(btn.getAttribute('data-tab')));
+    });
+
+    // 3. Casos Pre-cargados de Cátedra FIUBA
+    const PRESETS = {
+      'civil-pba': {
+        especialidad: 'Civil',
+        caso: 'Un ingeniero civil firma el cálculo estructural y la dirección de obra de una nave industrial en la Provincia de Buenos Aires, pero subcontrata el estudio geotécnico de suelos sin verificar la matrícula provincial del laboratorista. En el contrato incluyó una cláusula de limitación de responsabilidad por vicios del suelo. A los 3 años de la recepción definitiva cede una base principal comprometiendo la solidez del inmueble.',
+      },
+      'industrial-caba': {
+        especialidad: 'Industrial',
+        caso: 'Un ingeniero industrial matriculado únicamente en CPII proyecta, calcula y firma en CABA la instalación eléctrica de alta tensión (13.2 kV) y subestación transformadora de una planta fabril, sin intervención de un ingeniero electricista. Durante la puesta en marcha ocurre una falla de aislación y arco eléctrico que provoca lesiones graves a dos trabajadores.',
+      },
+      'informatica-dependencia': {
+        especialidad: 'Informatica',
+        caso: 'Un ingeniero en informática en relación de dependencia diseña e integra de forma permanente el sistema embebido de control edilicio y seguridad contra incendios (BMS) de un edificio inteligente en CABA. Por instrucción directa de su empleador para reducir costos, omite los lazos redundantes exigidos por la normativa técnica y a los 2 años el edificio resulta funcionalmente inoperable e impropio para su destino.',
+      },
+    };
+
+    document.querySelectorAll('.preset-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const key = btn.getAttribute('data-preset');
+        const preset = PRESETS[key];
+        if (!preset) return;
+        document.getElementById('select-especialidad').value = preset.especialidad;
+        document.getElementById('textarea-caso').value = preset.caso;
+      });
+    });
+
+    // 4. Subida e Ingesta de Leyes por PDF (Con validación SHACL Pre-Ingesta)
+    const pdfInput = document.getElementById('pdf-file-input');
+    const pdfLabel = document.getElementById('pdf-file-label');
+    const pdfForm = document.getElementById('pdf-upload-form');
+    const pdfResultBox = document.getElementById('pdf-upload-result');
+
+    pdfInput?.addEventListener('change', () => {
+      if (pdfInput.files && pdfInput.files[0]) {
+        pdfLabel.textContent = `Archivo seleccionado: ${pdfInput.files[0].name}`;
+        const lawInput = document.getElementById('pdf-law-number');
+        if (lawInput && !lawInput.value) {
+          lawInput.value = pdfInput.files[0].name.replace(/\.pdf$/i, '');
+        }
+      }
+    });
+
+    async function refreshCatalogGraph() {
+      const res = await fetch('/api/laws/catalog');
+      if (res.ok) {
+        const data = await res.json();
+        currentGraphNodes = data.nodes || [];
+        currentGraphEdges = data.edges || [];
+        document.getElementById('header-node-count').textContent = String(currentGraphNodes.length);
+        renderNeo4jGraph(currentGraphNodes, currentGraphEdges, currentGraphNodes[currentGraphNodes.length - 1]?.okf_id);
+      }
+    }
+
+    function renderPdfIngestionFeedback(result) {
+      pdfResultBox.classList.remove('hidden');
+      if (result.success) {
+        pdfResultBox.className = 'mt-3 rounded-xl border border-emerald-500/40 bg-emerald-950/30 p-3.5 text-xs text-emerald-200';
+        const ids = (result.nodesIngested || []).map((n) => n.okf_id).join(', ');
+        pdfResultBox.innerHTML = `
+          <div class="flex items-center justify-between font-bold text-emerald-300">
+            <span>✓ Ingesta Atómica OKF y Validación SHACL Pre-Ingesta Exitosa (${result.fileName})</span>
+            <span>${result.nodesIngested.length} Nodos creados en Neo4j</span>
+          </div>
+          <p class="mt-1 text-emerald-100/90">
+            Se extrajeron <strong>${result.extractedCharacters}</strong> caracteres y se estructuraron <strong>${result.atomicArticlesCreated}</strong> artículos atómicos con estado <code>sh:conforms = true</code>.
+          </p>
+          <p class="mt-1 font-mono text-[11px] text-sky-300">Nodos OKF incorporados al grafo: ${ids}</p>
+        `;
+      } else {
+        const firstViolation =
+          result.shaclReports?.[0]?.report?.violations?.[0]?.message ||
+          result.error ||
+          'El documento no superó las restricciones ontológicas SHACL.';
+        pdfResultBox.className = 'mt-3 rounded-xl border border-rose-500/40 bg-rose-950/30 p-3.5 text-xs text-rose-200';
+        pdfResultBox.innerHTML = `
+          <div class="font-bold text-rose-300">
+            ✗ Compuerta SHACL Pre-Ingesta Rechazó la Norma (${result.fileName || 'PDF'})
+          </div>
+          <p class="mt-1">Motivo determinista (<code>fiuba:OKFNodeShape</code>): <strong>${firstViolation}</strong></p>
+          <p class="mt-0.5 text-[11px] text-rose-300/80">Ningún nodo inválido fue ingresado a Neo4j, preservando la integridad epistémica del grafo.</p>
+        `;
+      }
+    }
+
+    pdfForm?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const file = pdfInput?.files?.[0];
+
+      if (!file) {
+        // Si el usuario no seleccionó un archivo físico, enviamos un payload PDF sintético con los datos del formulario
+        const lawNumber = document.getElementById('pdf-law-number').value;
+        const jurisdiction = document.getElementById('pdf-jurisdiction').value;
+        const shapeRole = document.getElementById('pdf-shape-role').value;
+        const status = document.getElementById('pdf-status').value;
+
+        const res = await fetch('/api/laws/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fileName: `${lawNumber.toLowerCase().replace(/[^a-z0-9]+/g, '_')}.pdf`,
+            lawNumber,
+            jurisdiction,
+            shapeRole,
+            status,
+            category: 'Seguridad_E_Incumbencias',
+            especialidades: ['Civil', 'Industrial', 'Mecanica', 'Electricista', 'Quimica'],
+            rawPdfText: `ARTÍCULO 1°.- En toda obra en construcción regida por ${lawNumber} se deberá confeccionar un Legajo Técnico de Higiene y Seguridad rubricado por ingeniero matriculado con incumbencia verificada (concuerda con Ley 19.587 y Art. 1273 CCyCN).\nARTÍCULO 2°.- El Director de Obra y el responsable de Higiene y Seguridad deberán verificar la matrícula vigente de todo subcontratista conforme al Decreto-Ley 6070/58 y Ley 10.416, siendo nula toda cláusula de dispensa de orden público (Art. 1276 CCyCN).`,
+          }),
+        });
+        const data = await res.json();
+        renderPdfIngestionFeedback(data);
+        if (data.success) await refreshCatalogGraph();
+        return;
+      }
+
+      const formData = new FormData(pdfForm);
+      const res = await fetch('/api/laws/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      renderPdfIngestionFeedback(data);
+      if (data.success) await refreshCatalogGraph();
+    });
+
+    // Botón de demostración instantánea de subida de PDF válido
+    document.getElementById('btn-demo-pdf-ingest')?.addEventListener('click', async () => {
+      document.getElementById('pdf-status').value = 'Vigente';
+      document.getElementById('pdf-law-number').value = 'Decreto 911/96 (Higiene y Seguridad en la Construcción)';
+      const res = await fetch('/api/laws/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileName: 'decreto_911_96_construccion.pdf',
+          lawNumber: 'Decreto 911/96',
+          jurisdiction: 'Nacional',
+          shapeRole: 'NormaFondo',
+          status: 'Vigente',
+          category: 'Higiene_Y_Seguridad_Construccion',
+          especialidades: ['Civil', 'Industrial', 'Mecanica', 'Electricista'],
+          rawPdfText: `ARTÍCULO 13.- El empleador, el Comitente y el Director de Obra son solidaria y concurrentemente responsables del cumplimiento de las normas de seguridad en la construcción conforme a la Ley 19.587 y Art. 1274 CCyCN.\nARTÍCULO 20.- El Legajo Técnico de Higiene y Seguridad deberá estar rubricado por un Ingeniero con matrícula activa en el Consejo o Colegio de la jurisdicción (Decreto-Ley 6070/58 o Ley 10.416 PBA) y visado conforme al Código de Ética Decreto 1099/84.`,
+        }),
+      });
+      const data = await res.json();
+      renderPdfIngestionFeedback(data);
+      if (data.success) await refreshCatalogGraph();
+    });
+
+    // Botón de demostración de rechazo SHACL (Ley Derogada)
+    document.getElementById('btn-demo-shacl-reject')?.addEventListener('click', async () => {
+      document.getElementById('pdf-status').value = 'Historica';
+      const res = await fetch('/api/laws/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileName: 'codigo_civil_velez_art_1646_derogado.pdf',
+          lawNumber: 'Código Civil Vélez Sarsfield (Derogado)',
+          jurisdiction: 'Nacional',
+          shapeRole: 'NormaFondo',
+          status: 'Historica',
+          category: 'Norma_Derogada',
+          especialidades: ['Civil'],
+          rawPdfText: `ARTÍCULO 1646.- Tratándose de edificios u obras en inmuebles destinados a larga duración (Art. derogado por Ley 26.994 CCyCN).`,
+        }),
+      });
+      const data = await res.json();
+      renderPdfIngestionFeedback(data);
+    });
+
+    // Toggle del panel PDF
+    document.getElementById('btn-toggle-pdf-panel')?.addEventListener('click', () => {
+      const sec = document.getElementById('pdf-upload-section');
+      sec?.scrollIntoView({ behavior: 'smooth' });
+    });
+
+    // 5. Renderizado de Markdown a HTML académico con píldoras interactivas [okf_id]
+    function formatDictamenMarkdownToHtml(markdownText) {
+      let html = markdownText
+        .replace(/^#### (.*$)/gim, '<h4>$1</h4>')
+        .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+        .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+        .replace(/^---$/gim, '<hr />')
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/`([^`]+)`/g, '<code>$1</code>');
+
+      // Convertir tablas Markdown
+      html = html.replace(/((?:\|.*\|\n)+)/g, (tableBlock) => {
+        const rows = tableBlock.trim().split('\n');
+        if (rows.length < 2) return tableBlock;
+        let tableHtml = '<table>';
+        rows.forEach((row, rIdx) => {
+          if (row.includes('---')) return;
+          const cells = row
+            .split('|')
+            .slice(1, -1)
+            .map((c) => c.trim());
+          const tag = rIdx === 0 ? 'th' : 'td';
+          tableHtml += '<tr>' + cells.map((c) => `<${tag}>${c}</${tag}>`).join('') + '</tr>';
+        });
+        tableHtml += '</table>';
+        return tableHtml;
+      });
+
+      // Convertir citas [norma-...] en botones interactivos que resaltan el nodo en el grafo Neo4j
+      html = html.replace(/\[(norma-[a-z0-9-]+)\]/gi, (_, okfId) => {
+        return `<button type="button" data-cite-okf="${okfId}" class="cite-okf-pill inline-flex items-center gap-1 rounded-md border border-sky-500/40 bg-sky-500/15 px-1.5 py-0.5 font-mono text-xs font-semibold text-sky-300 hover:bg-sky-500/30 cursor-pointer">🔗 ${okfId}</button>`;
+      });
+
+      // Párrafos y listas simples
+      const blocks = html.split('\n\n');
+      return blocks
+        .map((b) => {
+          const t = b.trim();
+          if (!t) return '';
+          if (t.startsWith('<h') || t.startsWith('<table') || t.startsWith('<hr')) return t;
+          if (t.startsWith('>')) {
+            return `<blockquote>${t.replace(/^>\s?/gm, '').replace(/\n/g, '<br/>')}</blockquote>`;
+          }
+          if (t.startsWith('- ') || t.startsWith('1. ')) {
+            const items = t
+              .split('\n')
+              .map((line) => `<li>${line.replace(/^(-|\d+\.)\s+/, '')}</li>`)
+              .join('');
+            return `<ul>${items}</ul>`;
+          }
+          return `<p>${t.replace(/\n/g, '<br/>')}</p>`;
+        })
+        .join('\n');
+    }
+
+    function bindCitationPills() {
+      document.querySelectorAll('.cite-okf-pill').forEach((pill) => {
+        pill.addEventListener('click', () => {
+          const okfId = pill.getAttribute('data-cite-okf');
+          activateSideTab('tab-graph');
+          selectedNodeId = okfId;
+          renderNeo4jGraph(currentGraphNodes, currentGraphEdges, okfId);
+        });
+      });
+    }
+
+    // 6. Renderizadores de los Paneles OPA y SHACL
+    function renderOPADecisionPanel(opa, hechos) {
+      const container = document.getElementById('opa-decision-container');
+      if (!container || !opa) return;
+
+      const alerts = [
+        ...(opa.infracciones_ejercicio || []),
+        ...(opa.clausulas_nulas || []),
+        ...(opa.conflictos_incumbencia || []),
+        ...(opa.directivas_defensa_consumidor || []),
+      ];
+
+      container.innerHTML = `
+        <div class="rounded-xl border border-amber-500/30 bg-amber-950/20 p-3.5">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-amber-300">Motor: ${opa.engine}</span>
+            <span class="font-mono text-[11px] text-amber-200">${opa.evaluation_time_ms} ms (0 tokens LLM)</span>
+          </div>
+          <p class="mt-1 text-[11px] text-slate-300">
+            Rama: <strong>${hechos.rama_ingenieria}</strong> • Jurisdicción: <strong>${hechos.jurisdiccion}</strong> • Plazo: <strong>${opa.evaluacion_plazos?.veredicto_determinista}</strong>
+          </p>
+        </div>
+
+        <div class="space-y-2">
+          <h4 class="font-bold uppercase tracking-wider text-slate-300">Veredictos Deterministas y Reglas Rego Activadas</h4>
+          ${alerts
+            .map(
+              (a) => `
+            <div class="rounded-lg border border-slate-800 bg-slate-950 p-3">
+              <div class="flex items-center justify-between gap-2">
+                <span class="font-mono font-bold text-rose-400">${a.codigo}</span>
+                <span class="rounded bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] text-sky-300">${a.fundamento_okf_id}</span>
+              </div>
+              <div class="mt-1 font-semibold text-white">${a.veredicto_determinista}</div>
+              <p class="mt-1 text-[11px] text-slate-400">${a.directiva_redaccion}</p>
+            </div>
+          `
+            )
+            .join('')}
+        </div>
+
+        <div class="rounded-xl border border-slate-800 bg-slate-950 p-3">
+          <h4 class="font-bold text-sky-300 mb-1.5">Pirámide de Prelación Normativa (Kelsen)</h4>
+          <div class="space-y-1.5">
+            ${(opa.prelacion_kelsen || [])
+              .map(
+                (k) => `
+              <div class="border-l-2 border-sky-500 pl-2.5 py-0.5">
+                <div class="font-semibold text-slate-200">Rango ${k.rango}: ${k.nivel}</div>
+                <div class="text-[11px] text-slate-400">${k.aplicacion}</div>
+              </div>
+            `
+              )
+              .join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderSHACLAndAuditPanel(shaclFinal, reparacionEjecutada, auditoria) {
+      const container = document.getElementById('shacl-report-container');
+      if (!container) return;
+
+      container.innerHTML = `
+        <div class="rounded-xl border ${
+          shaclFinal?.conforms ? 'border-emerald-500/40 bg-emerald-950/25' : 'border-rose-500/40 bg-rose-950/25'
+        } p-3.5">
+          <div class="flex items-center justify-between">
+            <span class="font-bold ${shaclFinal?.conforms ? 'text-emerald-300' : 'text-rose-300'}">
+              W3C SHACL (fiuba:LegalAnalysisShape): sh:conforms = ${Boolean(shaclFinal?.conforms)}
+            </span>
+            <span class="rounded bg-slate-900 px-2 py-0.5 font-mono text-[10px] text-purple-300">
+              ${reparacionEjecutada ? 'Autorreparado vía Cypher' : '1° Paso Directo'}
+            </span>
+          </div>
+          <p class="mt-1 text-[11px] text-slate-300">
+            Verifica que el subgrafo conecte el Hecho Ingenieril con al menos 1 <code>NormaFondo</code>, 1 <code>PrincipioDeResponsabilidad</code>, 1 <code>MarcoEjercicioProfesional</code> y 1 <code>EticaProfesional</code>.
+          </p>
+        </div>
+
+        ${
+          auditoria
+            ? `
+        <div class="rounded-xl border border-sky-500/30 bg-sky-950/20 p-3.5">
+          <div class="font-bold text-sky-300">
+            6. Certificado de Auditoría Epistémica Post-Generación
+          </div>
+          <p class="mt-1 text-[11px] text-slate-200">${auditoria.auditSummary}</p>
+          <div class="mt-2 flex flex-wrap gap-1">
+            ${(auditoria.citedOkfIds || [])
+              .map(
+                (id) =>
+                  `<span class="rounded bg-sky-500/20 px-1.5 py-0.5 font-mono text-[10px] text-sky-300">${id}</span>`
+              )
+              .join('')}
+          </div>
+        </div>
+        `
+            : ''
+        }
+
+        <div class="rounded-xl border border-slate-800 bg-slate-950 p-3">
+          <div class="mb-1.5 font-bold text-slate-300">Grafo RDF Validado en Memoria (Turtle Preview)</div>
+          <pre class="max-h-48 overflow-x-auto rounded bg-slate-900 p-2.5 font-mono text-[10px] text-purple-200">${
+            shaclFinal?.rdfTurtlePreview || ''
+          }</pre>
+        </div>
+      `;
+    }
+
+    // 7. Ejecución en Streaming del Pipeline de 6 Agentes
+    const dictamenForm = document.getElementById('dictamen-form');
+    const viewer = document.getElementById('dictamen-viewer');
+    const statusBadge = document.getElementById('pipeline-status-badge');
+    const charCounter = document.getElementById('dictamen-char-counter');
+
+    function updateStepCardUI(stepNumber, status, detailText) {
+      const card = document.querySelector(`[data-step-card="${stepNumber}"]`);
+      if (!card) return;
+      const badge = card.querySelector('.step-badge');
+      const detail = card.querySelector('.step-detail');
+
+      if (detail && detailText) detail.textContent = detailText;
+
+      if (status === 'running') {
+        card.className = 'rounded-xl border border-sky-500 bg-sky-950/30 p-3 transition shadow-md shadow-sky-500/10';
+        if (badge) {
+          badge.className = 'step-badge rounded bg-sky-500/20 px-1.5 py-0.5 text-[10px] font-bold text-sky-300 animate-pulse';
+          badge.textContent = 'En curso...';
+        }
+      } else if (status === 'completed' || status === 'repaired') {
+        card.className = 'rounded-xl border border-emerald-500/40 bg-emerald-950/20 p-3 transition';
+        if (badge) {
+          badge.className = 'step-badge rounded bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-bold text-emerald-300';
+          badge.textContent = status === 'repaired' ? 'Reparado ✓' : 'Completado ✓';
+        }
+      }
+    }
+
+    dictamenForm?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const casoPlanteado = document.getElementById('textarea-caso').value;
+      const especialidadIngenieria = document.getElementById('select-especialidad').value;
+      const btnSubmit = document.getElementById('btn-generar-dictamen');
+
+      btnSubmit.disabled = true;
+      btnSubmit.classList.add('opacity-60');
+      viewer.innerHTML = '';
+      let accumulatedSections = [];
+      let latestHechos = null;
+      let latestOPA = null;
+
+      // Resetear tarjetas de etapas
+      for (let s = 1; s <= 6; s++) {
+        const card = document.querySelector(`[data-step-card="${s}"]`);
+        if (card) {
+          card.className = 'rounded-xl border border-slate-800 bg-slate-950/80 p-3 transition';
+          const badge = card.querySelector('.step-badge');
+          if (badge) {
+            badge.className = 'step-badge rounded bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-400';
+            badge.textContent = 'En espera';
+          }
+        }
+      }
+
+      try {
+        const response = await fetch('/api/dictamen/stream', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ casoPlanteado, especialidadIngenieria }),
+        });
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            const msg = JSON.parse(line);
+
+            if (msg.type === 'step') {
+              const ev = msg.data;
+              statusBadge.textContent = `${ev.title}: ${ev.detail}`;
+              updateStepCardUI(ev.step, ev.status, ev.detail);
+
+              if (ev.step === 1 && ev.status === 'completed' && ev.payload) {
+                latestHechos = ev.payload.hechos;
+                document.getElementById('active-model-pill').textContent = `Modelo: ${ev.payload.modelUsed}`;
+              }
+
+              if (ev.step === 2 && ev.status === 'completed' && ev.payload) {
+                latestOPA = ev.payload;
+                renderOPADecisionPanel(latestOPA, latestHechos || { rama_ingenieria: especialidadIngenieria, jurisdiccion: 'PBA' });
+              }
+
+              if (ev.step === 3 && ev.status === 'completed' && ev.payload) {
+                currentGraphNodes = ev.payload.nodes || [];
+                currentGraphEdges = ev.payload.edges || [];
+                renderNeo4jGraph(currentGraphNodes, currentGraphEdges);
+              }
+
+              if (ev.step === 4 && (ev.status === 'completed' || ev.status === 'repaired') && ev.payload) {
+                currentGraphNodes = ev.payload.nodes || currentGraphNodes;
+                renderNeo4jGraph(currentGraphNodes, currentGraphEdges);
+                renderSHACLAndAuditPanel(ev.payload.reporteSHACLFinal, ev.payload.reparacionSHACLEjecutada, null);
+              }
+
+              if (ev.step === 5 && ev.status === 'completed' && ev.payload?.chapterCompleted) {
+                accumulatedSections.push(ev.payload.chapterCompleted.markdown);
+                const fullMd = accumulatedSections.join('\n\n---\n\n');
+                viewer.innerHTML = formatDictamenMarkdownToHtml(fullMd);
+                bindCitationPills();
+                const words = fullMd.trim().split(/\s+/).length;
+                charCounter.textContent = `${words} palabras (${fullMd.length} chars)`;
+              }
+
+              if (ev.step === 6 && ev.status === 'completed' && ev.payload) {
+                renderSHACLAndAuditPanel(
+                  { conforms: true, rdfTurtlePreview: document.querySelector('#shacl-report-container pre')?.textContent || '' },
+                  false,
+                  ev.payload
+                );
+              }
+            } else if (msg.type === 'complete') {
+              const finalData = msg.data;
+              viewer.innerHTML = formatDictamenMarkdownToHtml(finalData.dictamenCompletoMarkdown);
+              bindCitationPills();
+              const words = finalData.dictamenCompletoMarkdown.trim().split(/\s+/).length;
+              charCounter.textContent = `${words} palabras (${finalData.dictamenCompletoMarkdown.length} chars)`;
+              renderSHACLAndAuditPanel(
+                finalData.reporteSHACLFinal,
+                finalData.reparacionSHACLEjecutada,
+                finalData.auditoriaEpistemica
+              );
+              statusBadge.textContent = '✓ Dictamen Neuro-Simbólico completado y auditado con trazabilidad SHACL + OPA.';
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error en stream del dictamen:', err);
+        statusBadge.textContent = 'Error al ejecutar el pipeline.';
+      } finally {
+        btnSubmit.disabled = false;
+        btnSubmit.classList.remove('opacity-60');
+      }
+    });
+  </script>
+</Layout>
+

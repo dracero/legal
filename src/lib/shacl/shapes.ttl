@@ -1,0 +1,94 @@
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix fiuba: <http://fiuba.uba.ar/ontologia/legal#> .
+
+# 1. Shape Pre-Ingesta para Nodos Atómicos OKF extraídos de PDF
+fiuba:OKFNodeShape
+    a sh:NodeShape ;
+    sh:targetClass fiuba:OKFEntry ;
+    sh:property [
+        sh:path fiuba:okf_id ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:minLength 4 ;
+        sh:message "Todo nodo OKF debe poseer un identificador atómico único (fiuba:okf_id)." ;
+    ] ;
+    sh:property [
+        sh:path fiuba:title ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:minLength 5 ;
+        sh:message "Todo nodo OKF debe poseer un título descriptivo (fiuba:title)." ;
+    ] ;
+    sh:property [
+        sh:path fiuba:jurisdiction ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:in ( "Nacional" "CABA" "PBA" ) ;
+        sh:message "La jurisdicción debe ser 'Nacional', 'CABA' o 'PBA'." ;
+    ] ;
+    sh:property [
+        sh:path fiuba:status ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:hasValue "Vigente" ;
+        sh:message "Pre-ingesta rechazada por SHACL: solo se admiten normas con estado 'Vigente' en el índice activo." ;
+    ] ;
+    sh:property [
+        sh:path fiuba:shape_role ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:in ( "NormaFondo" "PrincipioDeResponsabilidad" "MarcoEjercicioProfesional" "EticaProfesional" ) ;
+        sh:message "Todo nodo OKF debe clasificar su rol ontológico (NormaFondo, PrincipioDeResponsabilidad, MarcoEjercicioProfesional o EticaProfesional)." ;
+    ] ;
+    sh:property [
+        sh:path fiuba:especialidad ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:message "El nodo OKF debe vincularse al menos a una especialidad de Ingeniería de la FIUBA." ;
+    ] .
+
+# 2. Shape Pre-Generación para el Esqueleto Argumental del Dictamen Legal
+fiuba:LegalAnalysisShape
+    a sh:NodeShape ;
+    sh:targetClass fiuba:DictamenLegal ;
+    sh:property [
+        sh:path fiuba:hasNormaFondo ;
+        sh:minCount 1 ;
+        sh:message "NormaFondo|El subgrafo debe conectar el hecho ingenieril con al menos una Norma de Fondo vigente." ;
+    ] ;
+    sh:property [
+        sh:path fiuba:hasPrincipioResponsabilidad ;
+        sh:minCount 1 ;
+        sh:message "PrincipioDeResponsabilidad|El subgrafo debe incluir al menos un nodo de Principio de Responsabilidad Civil o Penal." ;
+    ] ;
+    sh:property [
+        sh:path fiuba:hasMarcoEjercicio ;
+        sh:minCount 1 ;
+        sh:message "MarcoEjercicioProfesional|El subgrafo debe contener el marco de Colegiación e Incumbencias." ;
+    ] ;
+    sh:property [
+        sh:path fiuba:hasEticaProfesional ;
+        sh:minCount 1 ;
+        sh:message "EticaProfesional|El subgrafo debe contener al menos un nodo de Código de Ética Profesional." ;
+    ] ;
+    sh:property [
+        sh:path fiuba:missingRequiredOPANode ;
+        sh:maxCount 0 ;
+        sh:message "El subgrafo debe contener todos los nodos obligatorios exigidos por el fallo deóntico de OPA." ;
+    ] .
+
+# 3. Shape Post-Generación para Auditoría Epistémica de Trazabilidad de Citas
+fiuba:EpistemicAuditShape
+    a sh:NodeShape ;
+    sh:targetClass fiuba:AuditoriaDictamen ;
+    sh:property [
+        sh:path fiuba:hasVerifiedCitation ;
+        sh:minCount 1 ;
+        sh:message "El dictamen redactado debe contener citas trazables a nodos existentes en el subgrafo de Neo4j." ;
+    ] ;
+    sh:property [
+        sh:path fiuba:hasHallucinatedCitation ;
+        sh:maxCount 0 ;
+        sh:message "Violación Epistémica: Se detectaron citas a identificadores OKF inexistentes en el subgrafo validado de Neo4j." ;
+    ] .
