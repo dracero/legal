@@ -22,29 +22,14 @@ function resolveOpaBinary(): string {
   return 'opa';
 }
 
+import { geminiRotator } from './gemini/key-rotator.ts';
+
 export function getGeminiApiKeys(): string[] {
-  const keysRaw =
-    process.env.GEMINI_API_KEY ||
-    process.env.GOOGLE_API_KEY ||
-    process.env.GOOGLE_API_KEYS ||
-    '';
-  return keysRaw
-    .split(',')
-    .map((k) => k.trim())
-    .filter(Boolean);
+  return geminiRotator.getAllKeys().map((k) => k.key);
 }
 
-let currentKeyIndex = 0;
 export function getNextGeminiApiKey(): string {
-  const keys = getGeminiApiKeys();
-  if (keys.length === 0) {
-    throw new Error(
-      'Falta configurar GEMINI_API_KEY (o GOOGLE_API_KEY / GOOGLE_API_KEYS) en el archivo .env'
-    );
-  }
-  const key = keys[currentKeyIndex % keys.length];
-  currentKeyIndex = (currentKeyIndex + 1) % keys.length;
-  return key;
+  return geminiRotator.getNextActiveKey().key;
 }
 
 export const APP_CONFIG = {

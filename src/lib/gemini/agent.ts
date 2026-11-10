@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { GoogleGenAI, Type } from '@google/genai';
 import { APP_CONFIG, getNextGeminiApiKey } from '../config.ts';
+import { geminiRotator } from './key-rotator.ts';
 import { evaluarEnServidorOPA, type HechosCaso, type PolicyDecision } from '../opa/evaluator.ts';
 import {
   hybridRetrieveAndExpandSubgraph,
@@ -96,60 +97,27 @@ async function invokeGemini(params: {
   maxOutputTokens?: number;
 }): Promise<string> {
   const modelName = CONFIGURED_GEMINI_MODEL;
-  let lastError: any = null;
 
-  for (let attempt = 1; attempt <= 5; attempt++) {
-    const apiKey = getNextGeminiApiKey();
-    const client = new GoogleGenAI({ apiKey });
+  const config: Record<string, any> = {
+    systemInstruction: params.systemInstruction,
+  };
+  if (params.responseMimeType) config.responseMimeType = params.responseMimeType;
+  if (params.responseSchema) config.responseSchema = params.responseSchema;
+  if (params.maxOutputTokens) config.maxOutputTokens = params.maxOutputTokens;
 
-    const config: Record<string, any> = {
-      systemInstruction: params.systemInstruction,
-    };
-    if (params.responseMimeType) config.responseMimeType = params.responseMimeType;
-    if (params.responseSchema) config.responseSchema = params.responseSchema;
-    if (params.maxOutputTokens) config.maxOutputTokens = params.maxOutputTokens;
+  return await geminiRotator.executeWithRotation(async (client, key, masked) => {
+    const response = await client.models.generateContent({
+      model: modelName,
+      contents: params.contents,
+      config,
+    });
 
-    try {
-      const response = await client.models.generateContent({
-        model: modelName,
-        contents: params.contents,
-        config,
-      });
-
-      if (!response.text || response.text.trim().length === 0) {
-        throw new Error(`El modelo Gemini '${modelName}' no devolvió texto en su respuesta.`);
-      }
-
-      return response.text.trim();
-    } catch (err: any) {
-      lastError = err;
-      const isTransient =
-        err.status === 503 ||
-        err.status === 429 ||
-        err.message?.includes('503') ||
-        err.message?.includes('429') ||
-        err.message?.includes('high demand') ||
-        err.message?.includes('UNAVAILABLE');
-
-      if (isTransient && attempt < 5) {
-        const delays = [1500, 3000, 5000, 8000];
-        const delay = delays[attempt - 1] || 4000;
-        console.warn(`[Gemini ${modelName}] Reintentando tras alta demanda transitoria (intento ${attempt}/5 en ${delay}ms)...`);
-        await new Promise((r) => setTimeout(r, delay));
-        continue;
-      }
-
-      if (err.message?.includes('Quota exceeded') || err.message?.includes('RESOURCE_EXHAUSTED')) {
-        throw new Error(
-          `Límite de cuota diaria gratuita alcanzado en Google AI Studio para '${modelName}' (20 solicitudes/día en Free Tier). Puede agregar claves API adicionales separadas por coma en GEMINI_API_KEY en .env o vincular un plan con facturación para solicitudes ilimitadas.`
-        );
-      }
-
-      throw err;
+    if (!response.text || response.text.trim().length === 0) {
+      throw new Error(`El modelo Gemini '${modelName}' no devolvió texto en su respuesta.`);
     }
-  }
 
-  throw lastError;
+    return response.text.trim();
+  }, `invokeGemini (${modelName})`);
 }
 
 /**

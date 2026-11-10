@@ -59,7 +59,26 @@ Una vez iniciado, abre **`http://localhost:4321`** en tu navegador.
 ## 🧠 Características Técnicas
 
 - **Modelo de Razonamiento:** `gemini-3.6-flash` configurado de forma estricta. Cero modelos fallback.
+- **Rotación Inteligente de API Keys:** Pool dinámico de claves con balanceo *Round-Robin* y *Failover automático*. Si una clave agota su cuota diaria (429 / `RESOURCE_EXHAUSTED`), entra en *cooldown* y el sistema conmuta instantáneamente a la siguiente clave activa sin interrumpir el dictamen.
 - **Embeddings:** `Xenova/all-MiniLM-L6-v2` (384 dimensiones) ejecutado localmente con ONNX Runtime (`@xenova/transformers`).
 - **Motor Deóntico Simbólico:** Open Policy Agent (`legal_deontico.rego`, paquete `data.legal.deontico`).
 - **Validación Estructural y Epistémica:** W3C SHACL (`rdf-validate-shacl`) bajo el espacio de nombres `http://antigravity.ai/ontologia/legal#`.
 - **Base de Datos Gráfica:** Neo4j 5.20 en Docker (`bolt://localhost:7688`).
+
+---
+
+## 🔑 Configuración de Claves de Gemini en `.env`
+
+Puedes configurar una o múltiples claves API en el archivo `.env` para multiplicar tu cuota:
+
+```env
+# Claves separadas por coma o punto y coma
+GEMINI_API_KEY=AIzaSyA..., AIzaSyB...
+
+# O variables individuales numeradas
+# GEMINI_API_KEY_1=AIzaSyA...
+# GEMINI_API_KEY_2=AIzaSyB...
+```
+
+* El sistema detecta automáticamente nuevas claves agregadas al archivo `.env` en caliente sin necesidad de reiniciar el servidor.
+* Los logs muestran enmascaradas las claves utilizadas (ej. `AQ.Ab8...ecxvJg`) y el estado del pool.

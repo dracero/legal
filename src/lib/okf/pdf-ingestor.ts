@@ -3,6 +3,7 @@ import path from 'path';
 import matter from 'gray-matter';
 import { GoogleGenAI, Type } from '@google/genai';
 import { APP_CONFIG, getNextGeminiApiKey } from '../config.ts';
+import { geminiRotator } from '../gemini/key-rotator.ts';
 import {
   type OKFNode,
   type OKFRelation,
@@ -113,11 +114,8 @@ export async function extractOntologyAndDeonticLogicFromArticle(
 ): Promise<{ ontological_entities: OntologicalEntity[]; deontic_rules: DeonticRule[] }> {
   const modelName = APP_CONFIG.gemini.model;
 
-  for (let attempt = 1; attempt <= 4; attempt++) {
-    try {
-      const apiKey = getNextGeminiApiKey();
-      const client = new GoogleGenAI({ apiKey });
-
+  try {
+    return await geminiRotator.executeWithRotation(async (client, key, masked) => {
       const response = await client.models.generateContent({
         model: modelName,
         contents: `Analiza el siguiente artículo normativo y extrae su ontología y lógica deóntica:\n\nArtículo: ${articleTitle}\n\nTexto:\n${articleText}`,
@@ -137,47 +135,30 @@ export async function extractOntologyAndDeonticLogicFromArticle(
         ontological_entities: Array.isArray(parsed.ontological_entities) ? parsed.ontological_entities : [],
         deontic_rules: Array.isArray(parsed.deontic_rules) ? parsed.deontic_rules : [],
       };
-    } catch (err: any) {
-      const isTransient =
-        err.status === 503 ||
-        err.status === 429 ||
-        err.message?.includes('503') ||
-        err.message?.includes('429') ||
-        err.message?.includes('high demand') ||
-        err.message?.includes('UNAVAILABLE');
-
-      if (isTransient && attempt < 4) {
-        const delay = attempt * 1500;
-        console.warn(`[Gemini Deontic Extraction] Reintentando intento ${attempt}/4 en ${delay}ms...`);
-        await new Promise((r) => setTimeout(r, delay));
-        continue;
-      }
-
-      console.warn(`[Gemini Deontic Extraction] Error extrayendo ontología en artículo (${articleTitle}):`, err.message);
-      return {
-        ontological_entities: [
-          {
-            nombre: articleTitle.slice(0, 40),
-            categoria: 'ConceptoNormativo',
-            descripcion: 'Concepto normativo extraído del cuerpo legal cargado',
-          },
-        ],
-        deontic_rules: [
-          {
-            id: 'REG-01',
-            modalidad: 'OBLIGACION',
-            sujeto_normado: 'Sujeto alcanzado por la disposición',
-            conducta: 'Cumplimiento de las prescripciones del artículo',
-            condicion: 'Vigencia de la norma',
-            consecuencia: 'Responsabilidad por inobservancia legal',
-            palabras_clave: articleText.slice(0, 80).split(/\s+/).filter((w) => w.length > 4).slice(0, 4),
-          },
-        ],
-      };
-    }
+    }, `Extraer Deóntica (${articleTitle})`);
+  } catch (err: any) {
+    console.warn(`[Gemini Deontic Extraction] Error extrayendo ontología en artículo (${articleTitle}):`, err.message);
+    return {
+      ontological_entities: [
+        {
+          nombre: articleTitle.slice(0, 40),
+          categoria: 'ConceptoNormativo',
+          descripcion: 'Concepto normativo extraído del cuerpo legal cargado',
+        },
+      ],
+      deontic_rules: [
+        {
+          id: 'REG-01',
+          modalidad: 'OBLIGACION',
+          sujeto_normado: 'Sujeto alcanzado por la disposición',
+          conducta: 'Cumplimiento de las prescripciones del artículo',
+          condicion: 'Vigencia de la norma',
+          consecuencia: 'Responsabilidad por inobservancia legal',
+          palabras_clave: articleText.slice(0, 80).split(/\s+/).filter((w) => w.length > 4).slice(0, 4),
+        },
+      ],
+    };
   }
-
-  return { ontological_entities: [], deontic_rules: [] };
 }
 
 /**
