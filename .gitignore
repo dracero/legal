@@ -36,6 +36,9 @@ Thumbs.db
 # Binarios locales descargados para el entorno de ejecución (auto-instalados en ./bin/opa)
 /bin/
 
+# Fichas OKF cargadas dinámicamente por el usuario (el repositorio inicia vacío)
+src/content/okf/*.md
+
 # Cobertura y testing
 coverage/
 .nyc_output/

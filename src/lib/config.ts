@@ -27,12 +27,11 @@ export const APP_CONFIG = {
     maxOutputTokens: Number(process.env.GEMINI_MAX_OUTPUT_TOKENS || 32768),
   },
   huggingface: {
-    // Embeddings Hugging Face (all-MiniLM-L6-v2 de 384 dimensiones)
+    // Embeddings locales de Hugging Face (all-MiniLM-L6-v2 de 384 dimensiones)
     model:
       process.env.HUGGINGFACE_EMBEDDING_MODEL ||
       process.env.HF_EMBEDDING_MODEL ||
       'Xenova/all-MiniLM-L6-v2',
-    token: process.env.HF_TOKEN || process.env.HUGGINGFACE_TOKEN || '',
     dimensions: Number(process.env.NEO4J_VECTOR_DIMENSIONS || 384),
   },
   neo4j: {

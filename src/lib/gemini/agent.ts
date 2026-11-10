@@ -258,7 +258,7 @@ export interface PipelineStepEvent {
   step: number;
   stageId: string;
   title: string;
-  status: 'running' | 'completed' | 'repaired';
+  status: 'running' | 'completed' | 'repaired' | 'failed';
   detail: string;
   payload?: any;
 }
@@ -446,7 +446,7 @@ export async function executeNeuroSymbolicPipeline(
     step: 6,
     stageId: 'EpistemicAuditorNode',
     title: '6. Auditor Epistémico Post-Generación (SHACL + OPA)',
-    status: 'completed',
+    status: auditoriaEpistemica.passed ? 'completed' : 'failed',
     detail: auditoriaEpistemica.auditSummary,
     payload: auditoriaEpistemica,
   });

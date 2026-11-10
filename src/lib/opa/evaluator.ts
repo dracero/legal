@@ -2,11 +2,37 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
 import fs from 'fs/promises';
+import fsSync from 'fs';
 import os from 'os';
 import { APP_CONFIG } from '../config.ts';
+import { ensureAppOpaBinary } from './binary.js';
 import type { OKFNode } from '../neo4j/client.ts';
 
 const execFileAsync = promisify(execFile);
+
+let cachedOpaLabel: string | null = null;
+
+/**
+ * Obtiene dinámicamente la etiqueta de versión/motor OPA configurado.
+ */
+export async function getOpaRuntimeLabel(): Promise<string> {
+  if (cachedOpaLabel) return cachedOpaLabel;
+  if (APP_CONFIG.opa.serverUrl) {
+    cachedOpaLabel = 'OPA REST (Rego v1)';
+    return cachedOpaLabel;
+  }
+  try {
+    const bin = fsSync.existsSync(APP_CONFIG.opa.binPath)
+      ? APP_CONFIG.opa.binPath
+      : await ensureAppOpaBinary();
+    const { stdout } = await execFileAsync(bin, ['version']);
+    const match = stdout.match(/Version:\s*([0-9.]+)/i);
+    cachedOpaLabel = match ? `OPA ${match[1]} (Rego v1)` : 'OPA Rego v1';
+  } catch {
+    cachedOpaLabel = 'OPA Rego v1';
+  }
+  return cachedOpaLabel;
+}
 
 export interface HechosCaso {
   sujetos_involucrados: string[];
@@ -98,7 +124,10 @@ export async function evaluarEnServidorOPA(
     await fs.writeFile(tmpFile, JSON.stringify(inputPayload), 'utf-8');
 
     const policyFile = path.join(APP_CONFIG.opa.policyDir, 'legal_deontico.rego');
-    const { stdout } = await execFileAsync(APP_CONFIG.opa.binPath, [
+    const opaBin = fsSync.existsSync(APP_CONFIG.opa.binPath)
+      ? APP_CONFIG.opa.binPath
+      : await ensureAppOpaBinary();
+    const { stdout } = await execFileAsync(opaBin, [
       'eval',
       '--data',
       policyFile,

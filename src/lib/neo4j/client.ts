@@ -4,7 +4,11 @@ import path from 'path';
 import matter from 'gray-matter';
 import { APP_CONFIG } from '../config.ts';
 import { computeHuggingFaceEmbedding } from '../embeddings/huggingface.ts';
-import { applyNeo4jSchemaAndIndexes } from './schema.js';
+import {
+  applyNeo4jSchemaAndIndexes,
+  upsertOKFNodeInSession,
+  linkOKFRelationsInSession,
+} from './schema.js';
 
 export interface OKFRelation {
   type: string;
@@ -88,93 +92,7 @@ export async function upsertOKFNodeToNeo4j(node: OKFNode): Promise<void> {
     const embedding = await computeHuggingFaceEmbedding(
       `${node.title} ${node.law_number} ${node.category} ${node.content}`
     );
-
-    const safeLabel = (node.node_type || 'Articulo').replace(/[^a-zA-Z0-9_]/g, '') || 'Articulo';
-    const ontologicalEntitiesJson = JSON.stringify(node.ontological_entities || []);
-    const deonticRulesJson = JSON.stringify(node.deontic_rules || []);
-
-    await session.run(
-      `
-      MERGE (n:LegalOKF {okf_id: $okf_id})
-      SET n:${safeLabel},
-          n.title = $title,
-          n.node_type = $node_type,
-          n.law_number = $law_number,
-          n.article_number = $article_number,
-          n.hierarchy_level = $hierarchy_level,
-          n.domain = $domain,
-          n.category = $category,
-          n.jurisdiction = $jurisdiction,
-          n.status = $status,
-          n.last_updated = $last_updated,
-          n.content = $content,
-          n.embedding = $embedding,
-          n.ontological_entities_json = $ontologicalEntitiesJson,
-          n.deontic_rules_json = $deonticRulesJson
-      `,
-      {
-        okf_id: node.okf_id,
-        title: node.title,
-        node_type: node.node_type || 'Articulo',
-        law_number: node.law_number,
-        article_number: node.article_number,
-        hierarchy_level: node.hierarchy_level,
-        domain: node.domain,
-        category: node.category,
-        jurisdiction: node.jurisdiction,
-        status: node.status,
-        last_updated: node.last_updated,
-        content: node.content,
-        embedding,
-        ontologicalEntitiesJson,
-        deonticRulesJson,
-      }
-    );
-
-    // Persistir Entidades Ontológicas
-    for (const ent of node.ontological_entities || []) {
-      if (!ent.nombre) continue;
-      await session.run(
-        `
-        MATCH (n:LegalOKF {okf_id: $okf_id})
-        MERGE (c:ConceptoOntologico {nombre: $nombre})
-        SET c.categoria = $categoria, c.descripcion = $descripcion
-        MERGE (n)-[:DEFINE_CONCEPTO]->(c)
-        `,
-        {
-          okf_id: node.okf_id,
-          nombre: ent.nombre,
-          categoria: ent.categoria || 'ConceptoJuridico',
-          descripcion: ent.descripcion || '',
-        }
-      );
-    }
-
-    // Persistir Reglas Deónticas
-    for (const regla of node.deontic_rules || []) {
-      if (!regla.id) continue;
-      await session.run(
-        `
-        MATCH (n:LegalOKF {okf_id: $okf_id})
-        MERGE (r:ReglaDeontica {id: $reglaId})
-        SET r.modalidad = $modalidad,
-            r.sujeto_normado = $sujeto,
-            r.conducta = $conducta,
-            r.condicion = $condicion,
-            r.consecuencia = $consecuencia
-        MERGE (n)-[:ESTABLECE_DEBER]->(r)
-        `,
-        {
-          okf_id: node.okf_id,
-          reglaId: regla.id,
-          modalidad: regla.modalidad,
-          sujeto: regla.sujeto_normado,
-          conducta: regla.conducta,
-          condicion: regla.condicion,
-          consecuencia: regla.consecuencia,
-        }
-      );
-    }
+    await upsertOKFNodeInSession(session, node, embedding);
   } finally {
     await session.close();
   }
@@ -184,21 +102,7 @@ export async function linkOKFRelationsInNeo4j(nodes: OKFNode[]): Promise<void> {
   const driver = getNeo4jDriver();
   const session = driver.session();
   try {
-    for (const node of nodes) {
-      for (const rel of node.relations || []) {
-        const sanitizedRelType =
-          (rel.type || 'CONCUERDA_CON').replace(/[^A-Z0-9_]/gi, '_').toUpperCase() ||
-          'CONCUERDA_CON';
-        await session.run(
-          `
-          MATCH (a:LegalOKF {okf_id: $source})
-          MATCH (b:LegalOKF {okf_id: $target})
-          MERGE (a)-[:${sanitizedRelType}]->(b)
-          `,
-          { source: node.okf_id, target: rel.target }
-        );
-      }
-    }
+    await linkOKFRelationsInSession(session, nodes);
   } finally {
     await session.close();
   }
@@ -580,13 +484,23 @@ export async function getAllCatalogOKFNodes(): Promise<{
 
     const edgeRes = await session.run(`
       MATCH (a:LegalOKF)-[r]->(b:LegalOKF)
-      RETURN a.okf_id AS source, b.okf_id AS target, type(r) AS relType
+      RETURN DISTINCT a.okf_id AS source, b.okf_id AS target, type(r) AS relType
     `);
     const edges = edgeRes.records.map((r) => ({
       source: r.get('source'),
       target: r.get('target'),
       type: r.get('relType'),
     }));
+
+    const relsBySource = new Map<string, OKFRelation[]>();
+    for (const e of edges) {
+      const list = relsBySource.get(e.source) || [];
+      list.push({ type: e.type, target: e.target });
+      relsBySource.set(e.source, list);
+    }
+    for (const node of nodes) {
+      node.relations = relsBySource.get(node.okf_id) || [];
+    }
 
     const jurSet = new Set<string>(nodes.map((n) => n.jurisdiction).filter(Boolean));
 

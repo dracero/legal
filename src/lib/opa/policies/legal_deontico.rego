@@ -2,19 +2,36 @@ package legal.deontico
 
 import rego.v1
 
-# Funciones auxiliares de compatibilidad Rego v1
+# Normalización y coincidencia léxica precisa (sin reglas catch-all)
+split_words(text) := regex.split(`[\s,.;:()\[\]"'/\\\-]+`, lower(text))
+
+word_matches(text_lower, word) if {
+	count(word) >= 4
+	contains(text_lower, word)
+}
+
+word_matches(text_lower, word) if {
+	count(word) >= 7
+	prefix := substring(word, 0, 6)
+	contains(text_lower, prefix)
+}
+
 contains_term(text, term) if {
-	contains(lower(text), lower(term))
+	term_clean := trim_space(lower(term))
+	count(term_clean) >= 4
+	contains(lower(text), term_clean)
+}
+
+contains_term(text, term) if {
+	text_lower := lower(text)
+	some tok in split_words(term)
+	count(tok) >= 5
+	word_matches(text_lower, tok)
 }
 
 contains_any(text, terms) if {
 	some t in terms
 	contains_term(text, t)
-}
-
-list_contains_term(arr, term) if {
-	some item in arr
-	contains_term(item, term)
 }
 
 list_contains_any(arr, terms) if {
@@ -23,8 +40,15 @@ list_contains_any(arr, terms) if {
 	contains_term(item, t)
 }
 
-# Coincidencia disyuntiva para obligaciones
-matches_obligation_context(omisiones, _, _, keywords) if {
+# Extrae palabras clave de la regla o, en su ausencia, de los campos de la propia regla
+rule_keywords(r) := kws if {
+	raw := object.get(r, "palabras_clave", [])
+	count(raw) > 0
+	kws := raw
+} else := [r.conducta, r.condicion, r.sujeto_normado, r.consecuencia]
+
+# Coincidencia estricta basada en términos de la regla contra el contexto del caso
+matches_obligation_context(omisiones, conductas, resumen, keywords) if {
 	list_contains_any(omisiones, keywords)
 }
 
@@ -36,11 +60,6 @@ matches_obligation_context(_, _, resumen, keywords) if {
 	contains_any(resumen, keywords)
 }
 
-matches_obligation_context(omisiones, _, _, _) if {
-	count(omisiones) > 0
-}
-
-# Coincidencia disyuntiva para prohibiciones
 matches_prohibition_context(conductas, _, keywords) if {
 	list_contains_any(conductas, keywords)
 }
@@ -49,11 +68,6 @@ matches_prohibition_context(_, resumen, keywords) if {
 	contains_any(resumen, keywords)
 }
 
-matches_prohibition_context(conductas, _, _) if {
-	count(conductas) > 0
-}
-
-# Coincidencia disyuntiva para cláusulas inválidas / nulidades
 matches_nullity_context(clausulas, _, keywords) if {
 	list_contains_any(clausulas, keywords)
 }
@@ -62,11 +76,19 @@ matches_nullity_context(_, resumen, keywords) if {
 	contains_any(resumen, keywords)
 }
 
-matches_nullity_context(clausulas, _, _) if {
-	count(clausulas) > 0
+matches_permission_context(sujetos, conductas, resumen, r, keywords) if {
+	list_contains_any(sujetos, [r.sujeto_normado])
 }
 
-# 1. Detección de Incumplimientos de Obligación (Mandatos Deónticos: Deberes de Hacer o Dar)
+matches_permission_context(_, conductas, _, _, keywords) if {
+	list_contains_any(conductas, keywords)
+}
+
+matches_permission_context(_, _, resumen, _, keywords) if {
+	contains_any(resumen, keywords)
+}
+
+# 1. Incumplimientos de Obligación
 incumplimientos_obligacion contains msg if {
 	some n in object.get(input, "nodos_cargados", [])
 	n.status == "Vigente"
@@ -76,7 +98,7 @@ incumplimientos_obligacion contains msg if {
 	omisiones := object.get(input, "omisiones_atribuidas", [])
 	conductas := object.get(input, "conductas_relevantes", [])
 	resumen := object.get(input, "resumen_factico", "")
-	keywords := object.get(r, "palabras_clave", [r.conducta, r.sujeto_normado])
+	keywords := rule_keywords(r)
 
 	matches_obligation_context(omisiones, conductas, resumen, keywords)
 
@@ -88,11 +110,11 @@ incumplimientos_obligacion contains msg if {
 		"sujeto_normado": r.sujeto_normado,
 		"conducta": r.conducta,
 		"consecuencia": r.consecuencia,
-		"directiva_redaccion": sprintf("Exigir el cumplimiento del deber '%s' asignado a '%s'. La inobservancia o reticencia configura infracción con consecuencia jurídica: %s.", [r.conducta, r.sujeto_normado, r.consecuencia]),
+		"directiva_redaccion": sprintf("Exigir el cumplimiento del deber '%s' asignado a '%s'. La inobservancia configura infracción con consecuencia jurídica: %s.", [r.conducta, r.sujeto_normado, r.consecuencia]),
 	}
 }
 
-# 2. Detección de Violaciones a Prohibiciones (Deberes de No Hacer / Conductas Vedadas)
+# 2. Violaciones a Prohibiciones
 violaciones_prohibicion contains msg if {
 	some n in object.get(input, "nodos_cargados", [])
 	n.status == "Vigente"
@@ -101,7 +123,7 @@ violaciones_prohibicion contains msg if {
 
 	conductas := object.get(input, "conductas_relevantes", [])
 	resumen := object.get(input, "resumen_factico", "")
-	keywords := object.get(r, "palabras_clave", [r.conducta, r.sujeto_normado])
+	keywords := rule_keywords(r)
 
 	matches_prohibition_context(conductas, resumen, keywords)
 
@@ -117,7 +139,7 @@ violaciones_prohibicion contains msg if {
 	}
 }
 
-# 3. Detección de Cláusulas Inválidas o Nulidades de Pleno Derecho
+# 3. Cláusulas Inválidas o Sanciones de Nulidad
 clausulas_invalidas contains msg if {
 	some n in object.get(input, "nodos_cargados", [])
 	n.status == "Vigente"
@@ -125,8 +147,9 @@ clausulas_invalidas contains msg if {
 	r.modalidad in {"SANCION_NULIDAD", "PROHIBICION"}
 
 	clausulas := object.get(input, "clausulas_o_defensas_invocadas", [])
+	count(clausulas) > 0
 	resumen := object.get(input, "resumen_factico", "")
-	keywords := object.get(r, "palabras_clave", [r.conducta, "dispensa", "renuncia", "exclusión", "limitación"])
+	keywords := rule_keywords(r)
 
 	matches_nullity_context(clausulas, resumen, keywords)
 
@@ -138,16 +161,23 @@ clausulas_invalidas contains msg if {
 		"sujeto_normado": r.sujeto_normado,
 		"conducta": r.conducta,
 		"consecuencia": r.consecuencia,
-		"directiva_redaccion": sprintf("La estipulación o defensa invocada vulnera el precepto imperativo '%s'. Consecuencia determinista: %s.", [r.conducta, r.consecuencia]),
+		"directiva_redaccion": sprintf("La estipulación o defensa invocada vulnera el precepto '%s'. Consecuencia determinista: %s.", [r.conducta, r.consecuencia]),
 	}
 }
 
-# 4. Reconocimiento de Permisiones y Facultades Legales (Derechos Subjetivos)
+# 4. Permisiones y Facultades Aplicables al Caso
 permisiones_aplicables contains msg if {
 	some n in object.get(input, "nodos_cargados", [])
 	n.status == "Vigente"
 	some r in object.get(n, "deontic_rules", [])
 	r.modalidad == "PERMISION"
+
+	sujetos := object.get(input, "sujetos_involucrados", [])
+	conductas := object.get(input, "conductas_relevantes", [])
+	resumen := object.get(input, "resumen_factico", "")
+	keywords := rule_keywords(r)
+
+	matches_permission_context(sujetos, conductas, resumen, r, keywords)
 
 	msg := {
 		"codigo": sprintf("PERM-%s", [r.id]),
@@ -161,51 +191,93 @@ permisiones_aplicables contains msg if {
 	}
 }
 
-# 5. Prelación Normativa Universal (Jerarquía de Kelsen)
-prelacion_kelsen := [
-	{
-		"rango": 1,
-		"nivel": "Constitución y Tratados Internacionales de Derechos Fundamentales",
-		"aplicacion": "Supremacía constitucional y garantías de orden público que subordinan a toda norma infraconstitucional.",
-	},
-	{
-		"rango": 2,
-		"nivel": "Leyes y Normas Sustantivas de Fondo",
-		"aplicacion": "Preceptos imperativos inderogables por voluntad de las partes que estructuran el régimen de responsabilidad y derechos subjetivos.",
-	},
-	{
-		"rango": 3,
-		"nivel": "Decretos Reglamentarios, Resoluciones y Disposiciones Administrativas",
-		"aplicacion": "Criterios técnicos, procedimientos de contralor y regulación de aplicación específica dictadas en el marco de la ley.",
-	},
-	{
-		"rango": 4,
-		"nivel": "Actos Jurídicos, Contratos y Convenciones Particulares",
-		"aplicacion": "Autonomía de la voluntad vinculante para las partes siempre que no contravenga normas imperativas o de orden público.",
-	},
-]
-
-# 6. Selección Dinámica de Nodos Obligatorios: Toma ÚNICAMENTE los nodos que el usuario cargó en Neo4j
-nodos_okf_obligatorios contains n.okf_id if {
+# 5. Prelación Normativa Dinámica derivada de las normas cargadas y cláusulas del caso
+loaded_laws := {law |
 	some n in object.get(input, "nodos_cargados", [])
 	n.status == "Vigente"
+	law := object.get(n, "law_number", n.okf_id)
+	law != ""
 }
 
-# 7. Términos de búsqueda extraídos de los hechos del caso
+laws_summary := concat(", ", loaded_laws) if {
+	count(loaded_laws) > 0
+} else := "Normativa vigente cargada"
+
+prelacion_kelsen := array.concat(
+	[
+		{
+			"rango": 1,
+			"nivel": sprintf("Marco Normativo Imperativo Cargado (%s)", [laws_summary]),
+			"aplicacion": sprintf("Disposiciones vigentes evaluadas del documento (%d reglas activadas en obligaciones/prohibiciones/nulidades).", [count(incumplimientos_obligacion) + count(violaciones_prohibicion) + count(clausulas_invalidas)]),
+		},
+		{
+			"rango": 2,
+			"nivel": "Subsunción Deóntica sobre Hechos del Caso",
+			"aplicacion": sprintf("Evaluación específica respecto de '%s' (%s) en relación con los nodos OKF implicados.", [object.get(input, "parte_evaluada", "parte evaluada"), object.get(input, "rol_o_condicion_juridica", "sujeto")]),
+		},
+	],
+	clause_hierarchy_entries,
+)
+
+clause_hierarchy_entries := [
+	{
+		"rango": 3,
+		"nivel": "Estipulaciones Particulares / Defensas Invocadas",
+		"aplicacion": sprintf("Se analizaron %d defensa(s)/cláusula(s) frente al marco normativo: %d cuestionada(s) por invalidez o nulidad.", [count(object.get(input, "clausulas_o_defensas_invocadas", [])), count(clausulas_invalidas)]),
+	},
+] if {
+	count(object.get(input, "clausulas_o_defensas_invocadas", [])) > 0
+} else := []
+
+# 6. Nodos OKF Obligatorios: estrictamente los nodos implicados por reglas activadas
+nodos_okf_obligatorios contains item.fundamento_okf_id if {
+	some item in incumplimientos_obligacion
+}
+
+nodos_okf_obligatorios contains item.fundamento_okf_id if {
+	some item in violaciones_prohibicion
+}
+
+nodos_okf_obligatorios contains item.fundamento_okf_id if {
+	some item in clausulas_invalidas
+}
+
+nodos_okf_obligatorios contains item.fundamento_okf_id if {
+	some item in permisiones_aplicables
+}
+
+# 7. Términos de búsqueda obligatorios extraídos del caso
 terminos_busqueda_obligatorios contains sprintf("%s %s", [object.get(input, "parte_evaluada", "parte"), object.get(input, "rol_o_condicion_juridica", "rol")])
 
-# 8. Escenarios Contrafácticos Generados Dinámicamente
-escenarios_contrafacticos := [
+# 8. Escenarios Contrafácticos Dinámicos generados a partir de los hallazgos activados
+cf_obligaciones := [
 	{
-		"id": "CF-1-CUMPLIMIENTO-ESTRICTO",
-		"titulo": "Hipótesis Contrafáctica A: Cumplimiento Tempéstivo de Deberes Normativos",
-		"hipotesis": "Si la parte evaluada hubiera cumplido en tiempo y forma las obligaciones prescriptas en el documento cargado.",
-		"regla_aplicable": "El cumplimiento estricto extingue el factor de atribución de responsabilidad y enerva las sanciones previstas en el texto legal.",
-	},
-	{
-		"id": "CF-2-VALIDEZ-DISPOSICION",
-		"titulo": "Hipótesis Contrafáctica B: Invalidez o Nulidad de Cláusulas Contradictorias",
-		"hipotesis": "Si las partes hubieran pactado dispensas o limitaciones contrarias a las prescripciones imperativas del documento.",
-		"regla_aplicable": "Las cláusulas que contradigan normas imperativas se tienen por no escritas sin invalidar el resto de la relación jurídica vinculante.",
-	},
+		"id": sprintf("CF-%s", [item.codigo]),
+		"titulo": sprintf("Cumplimiento contrafáctico de %s (%s)", [item.fundamento_okf_id, item.codigo]),
+		"hipotesis": sprintf("Si '%s' hubiera ejecutado la conducta debida: %s.", [item.sujeto_normado, item.conducta]),
+		"regla_aplicable": sprintf("Se habría evitado el incumplimiento previsto en [%s], excluyendo la consecuencia: %s.", [item.fundamento_okf_id, item.consecuencia]),
+	} |
+	some item in incumplimientos_obligacion
 ]
+
+cf_prohibiciones := [
+	{
+		"id": sprintf("CF-%s", [item.codigo]),
+		"titulo": sprintf("Abstención contrafáctica de %s (%s)", [item.fundamento_okf_id, item.codigo]),
+		"hipotesis": sprintf("Si '%s' se hubiera abstenido de la conducta vedada: %s.", [item.sujeto_normado, item.conducta]),
+		"regla_aplicable": sprintf("No se habría configurado la transgresión a [%s] ni su sanción asociada: %s.", [item.fundamento_okf_id, item.consecuencia]),
+	} |
+	some item in violaciones_prohibicion
+]
+
+cf_nulidades := [
+	{
+		"id": sprintf("CF-%s", [item.codigo]),
+		"titulo": sprintf("Validez sin cláusula contradictoria (%s)", [item.codigo]),
+		"hipotesis": sprintf("Si las estipulaciones invocadas no contradijeran [%s] (%s).", [item.fundamento_okf_id, item.conducta]),
+		"regla_aplicable": sprintf("La relación jurídica subsistiría sin activarse la consecuencia: %s.", [item.consecuencia]),
+	} |
+	some item in clausulas_invalidas
+]
+
+escenarios_contrafacticos := array.concat(cf_obligaciones, array.concat(cf_prohibiciones, cf_nulidades))

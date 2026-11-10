@@ -159,7 +159,7 @@ export async function auditarDictamenEpistemico(
   const ns = APP_CONFIG.shacl.ontologyNamespace;
   const validNodeMap = new Map<string, OKFNode>(subgrafo.map((n) => [n.okf_id.toLowerCase(), n]));
 
-  // Extraer todas las citas explícitas [norma-...] del dictamen
+  // Extraer únicamente citas explícitas entre corchetes [norma-...] del dictamen
   const citationMatches = Array.from(dictamenMarkdown.matchAll(/\[(norma-[a-z0-9_-]+)\]/gi));
   const citedSet = new Set<string>();
   const unverifiedSet = new Set<string>();
@@ -170,14 +170,6 @@ export async function auditarDictamenEpistemico(
       citedSet.add(validNodeMap.get(citedId)!.okf_id);
     } else {
       unverifiedSet.add(citedId);
-    }
-  }
-
-  // Verificar menciones de okf_id directo en texto
-  const lowerText = dictamenMarkdown.toLowerCase();
-  for (const node of subgrafo) {
-    if (lowerText.includes(node.okf_id.toLowerCase())) {
-      citedSet.add(node.okf_id);
     }
   }
 
@@ -214,18 +206,19 @@ export async function auditarDictamenEpistemico(
 
   const shaclPostConditionConforms = Boolean(report.conforms);
   const opaComplianceVerified = unverifiedCitations.length === 0 && citedOkfIds.length > 0;
+  const passed = shaclPostConditionConforms && opaComplianceVerified;
 
   return {
-    passed: shaclPostConditionConforms && opaComplianceVerified,
+    passed,
     totalNodesInSubgraph: subgrafo.length,
     citedOkfIds,
     citedLawsMatched,
     unverifiedCitations,
     opaComplianceVerified,
     shaclPostConditionConforms,
-    auditSummary: shaclPostConditionConforms
+    auditSummary: passed
       ? `Auditoría Epistémica SHACL Aprobada: ${citedOkfIds.length}/${subgrafo.length} normas del documento citadas con trazabilidad verificada y 0 citas alucinadas.`
-      : `Alerta Epistémica SHACL: ${(report.results || []).map((r: any) => r.message?.[0]?.value).join(' | ')}`,
+      : `Alerta Epistémica SHACL: ${(report.results || []).map((r: any) => r.message?.[0]?.value).join(' | ') || 'Faltan citas verificadas o se detectaron citas no pertenecientes al subgrafo.'}`,
   };
 }
 

@@ -16,6 +16,7 @@ test_evaluacion_deontica_documento if {
 		"nodos_cargados": [
 			{
 				"okf_id": "norma-doc-art-1",
+				"law_number": "Régimen de Pruebas",
 				"title": "Obligación de Garantía Legal",
 				"status": "Vigente",
 				"content": "El proveedor está obligado a garantizar la idoneidad del bien...",
@@ -49,22 +50,44 @@ test_evaluacion_deontica_documento if {
 					},
 				],
 			},
+			{
+				"okf_id": "norma-unrelated-art-99",
+				"law_number": "Régimen de Pruebas",
+				"title": "Arancel de Exportación",
+				"status": "Vigente",
+				"content": "Toda exportación tributaria abonará aranceles aduaneros...",
+				"deontic_rules": [
+					{
+						"id": "REG-99",
+						"modalidad": "OBLIGACION",
+						"sujeto_normado": "Exportador",
+						"conducta": "Liquidar derechos aduaneros de exportación",
+						"condicion": "Despacho de mercadería exterior",
+						"consecuencia": "Multa tributaria aduanera",
+						"palabras_clave": ["arancel", "exportación", "aduanero"],
+					},
+				],
+			},
 		],
 	}
 
 	incumplimientos := deontico.incumplimientos_obligacion with input as mock_input
-	count(incumplimientos) >= 1
+	count(incumplimientos) == 1
+	incumplimientos[_].fundamento_okf_id == "norma-doc-art-1"
 
 	violaciones := deontico.violaciones_prohibicion with input as mock_input
-	count(violaciones) >= 1
+	count(violaciones) == 1
 
 	nulas := deontico.clausulas_invalidas with input as mock_input
-	count(nulas) >= 1
+	count(nulas) == 1
 
 	permisiones := deontico.permisiones_aplicables with input as mock_input
-	count(permisiones) >= 1
+	count(permisiones) == 1
 
 	obligatorios := deontico.nodos_okf_obligatorios with input as mock_input
 	"norma-doc-art-1" in obligatorios
-}
+	not ("norma-unrelated-art-99" in obligatorios)
 
+	cfs := deontico.escenarios_contrafacticos with input as mock_input
+	count(cfs) >= 2
+}

@@ -172,7 +172,7 @@ async function extractOntologyAndDeonticBatch(
 
 /**
  * Extrae dinámicamente la Ontología y la Lógica Deóntica del texto del artículo
- * utilizando exclusivamente Gemini 3.6 Flash (sin modelo fallback).
+ * utilizando exclusivamente Gemini 3.6 Flash (sin fallback sintético).
  */
 export async function extractOntologyAndDeonticLogicFromArticle(
   articleText: string,
@@ -180,51 +180,27 @@ export async function extractOntologyAndDeonticLogicFromArticle(
 ): Promise<{ ontological_entities: OntologicalEntity[]; deontic_rules: DeonticRule[] }> {
   const modelName = APP_CONFIG.gemini.model;
 
-  try {
-    return await geminiRotator.executeWithRotation(async (client, key, masked) => {
-      const response = await client.models.generateContent({
-        model: modelName,
-        contents: `Analiza el siguiente artículo normativo y extrae su ontología y lógica deóntica:\n\nArtículo: ${articleTitle}\n\nTexto:\n${articleText}`,
-        config: {
-          systemInstruction:
-            'Eres un Jurista experto en Ontologías Jurídicas y Lógica Deóntica Formal. ' +
-            'Tu labor es extraer estrictamente del texto provisto las entidades ontológicas (conceptos y sujetos) ' +
-            'y las reglas deónticas (modalidades OBLIGACION, PROHIBICION, PERMISION, SANCION_NULIDAD). ' +
-            'No inventes información ajena al texto. Devuelve el JSON conforme al esquema provisto.',
-          responseMimeType: 'application/json',
-          responseSchema: DEONTIC_EXTRACTION_SCHEMA,
-        },
-      });
+  return await geminiRotator.executeWithRotation(async (client) => {
+    const response = await client.models.generateContent({
+      model: modelName,
+      contents: `Analiza el siguiente artículo normativo y extrae su ontología y lógica deóntica:\n\nArtículo: ${articleTitle}\n\nTexto:\n${articleText}`,
+      config: {
+        systemInstruction:
+          'Eres un Jurista experto en Ontologías Jurídicas y Lógica Deóntica Formal. ' +
+          'Tu labor es extraer estrictamente del texto provisto las entidades ontológicas (conceptos y sujetos) ' +
+          'y las reglas deónticas (modalidades OBLIGACION, PROHIBICION, PERMISION, SANCION_NULIDAD). ' +
+          'No inventes información ajena al texto. Devuelve el JSON conforme al esquema provisto.',
+        responseMimeType: 'application/json',
+        responseSchema: DEONTIC_EXTRACTION_SCHEMA,
+      },
+    });
 
-      const parsed = JSON.parse(response.text || '{}');
-      return {
-        ontological_entities: Array.isArray(parsed.ontological_entities) ? parsed.ontological_entities : [],
-        deontic_rules: Array.isArray(parsed.deontic_rules) ? parsed.deontic_rules : [],
-      };
-    }, `Extraer Deóntica (${articleTitle})`);
-  } catch (err: any) {
-    console.warn(`[Gemini Deontic Extraction] Error extrayendo ontología en artículo (${articleTitle}):`, err.message);
+    const parsed = JSON.parse(response.text || '{}');
     return {
-      ontological_entities: [
-        {
-          nombre: articleTitle.slice(0, 40),
-          categoria: 'ConceptoNormativo',
-          descripcion: 'Concepto normativo extraído del cuerpo legal cargado',
-        },
-      ],
-      deontic_rules: [
-        {
-          id: 'REG-01',
-          modalidad: 'OBLIGACION',
-          sujeto_normado: 'Sujeto alcanzado por la disposición',
-          conducta: 'Cumplimiento de las prescripciones del artículo',
-          condicion: 'Vigencia de la norma',
-          consecuencia: 'Responsabilidad por inobservancia legal',
-          palabras_clave: articleText.slice(0, 80).split(/\s+/).filter((w) => w.length > 4).slice(0, 4),
-        },
-      ],
+      ontological_entities: Array.isArray(parsed.ontological_entities) ? parsed.ontological_entities : [],
+      deontic_rules: Array.isArray(parsed.deontic_rules) ? parsed.deontic_rules : [],
     };
-  }
+  }, `Extraer Deóntica (${articleTitle})`);
 }
 
 /**

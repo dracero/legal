@@ -4,7 +4,11 @@ import path from 'path';
 import matter from 'gray-matter';
 import { pipeline } from '@xenova/transformers';
 import dotenv from 'dotenv';
-import { applyNeo4jSchemaAndIndexes } from '../src/lib/neo4j/schema.js';
+import {
+  applyNeo4jSchemaAndIndexes,
+  upsertOKFNodeInSession,
+  linkOKFRelationsInSession,
+} from '../src/lib/neo4j/schema.js';
 
 dotenv.config();
 
@@ -110,99 +114,11 @@ export async function seedDatabase() {
       const embedding = await computeHfEmbedding(
         `${node.title} ${node.law_number} ${node.category} ${node.content}`
       );
-
-      const safeLabel = node.node_type.replace(/[^a-zA-Z0-9_]/g, '') || 'Norma';
-
-      await session.run(
-        `
-        MERGE (n:LegalOKF {okf_id: $okf_id})
-        SET n:${safeLabel},
-            n.title = $title,
-            n.node_type = $node_type,
-            n.law_number = $law_number,
-            n.article_number = $article_number,
-            n.hierarchy_level = $hierarchy_level,
-            n.domain = $domain,
-            n.category = $category,
-            n.jurisdiction = $jurisdiction,
-            n.status = $status,
-            n.last_updated = $last_updated,
-            n.content = $content,
-            n.embedding = $embedding,
-            n.ontological_entities_json = $ontologicalEntitiesJson,
-            n.deontic_rules_json = $deonticRulesJson
-        `,
-        {
-          ...node,
-          embedding,
-          ontologicalEntitiesJson: JSON.stringify(node.ontological_entities),
-          deonticRulesJson: JSON.stringify(node.deontic_rules),
-        }
-      );
-
-      for (const ent of node.ontological_entities) {
-        if (!ent.nombre) continue;
-        await session.run(
-          `
-          MATCH (n:LegalOKF {okf_id: $okf_id})
-          MERGE (c:ConceptoOntologico {nombre: $nombre})
-          SET c.categoria = $categoria, c.descripcion = $descripcion
-          MERGE (n)-[:DEFINE_CONCEPTO]->(c)
-          `,
-          {
-            okf_id: node.okf_id,
-            nombre: ent.nombre,
-            categoria: ent.categoria || 'ConceptoJuridico',
-            descripcion: ent.descripcion || '',
-          }
-        );
-      }
-
-      for (const regla of node.deontic_rules) {
-        if (!regla.id) continue;
-        await session.run(
-          `
-          MATCH (n:LegalOKF {okf_id: $okf_id})
-          MERGE (r:ReglaDeontica {id: $reglaId})
-          SET r.modalidad = $modalidad,
-              r.sujeto_normado = $sujeto,
-              r.conducta = $conducta,
-              r.condicion = $condicion,
-              r.consecuencia = $consecuencia
-          MERGE (n)-[:ESTABLECE_DEBER]->(r)
-          `,
-          {
-            okf_id: node.okf_id,
-            reglaId: regla.id,
-            modalidad: regla.modalidad,
-            sujeto: regla.sujeto_normado,
-            conducta: regla.conducta,
-            condicion: regla.condicion,
-            consecuencia: regla.consecuencia,
-          }
-        );
-      }
-
+      await upsertOKFNodeInSession(session, node, embedding);
       parsedNodes.push(node);
     }
 
-    let edgeCount = 0;
-    for (const node of parsedNodes) {
-      for (const rel of node.relations) {
-        const sanitizedRelType =
-          (rel.type || 'CONCUERDA_CON').replace(/[^A-Z0-9_]/gi, '_').toUpperCase() ||
-          'CONCUERDA_CON';
-        await session.run(
-          `
-          MATCH (a:LegalOKF {okf_id: $source})
-          MATCH (b:LegalOKF {okf_id: $target})
-          MERGE (a)-[:${sanitizedRelType}]->(b)
-          `,
-          { source: node.okf_id, target: rel.target }
-        );
-        edgeCount++;
-      }
-    }
+    const edgeCount = await linkOKFRelationsInSession(session, parsedNodes);
 
     console.log(`[Neo4j] Sincronización exitosa: ${parsedNodes.length} nodos y ${edgeCount} relaciones.`);
   } finally {
