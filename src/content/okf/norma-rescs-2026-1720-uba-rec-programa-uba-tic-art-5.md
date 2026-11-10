@@ -16,21 +16,144 @@ relations:
   - type: CONCUERDA_CON
     target: norma-rescs-2026-1720-uba-rec-programa-uba-tic-art-4
 ontological_entities:
-  - nombre: RESCS-2026-1720-UBA-REC-Programa UBA-TIC
-    categoria: ConceptoNormativo
-    descripcion: Concepto normativo extraído del cuerpo legal cargado
+  - nombre: Universidad de Buenos Aires
+    categoria: SujetoDeDerecho
+    descripcion: >-
+      Institución universitaria titular de los bienes adquiridos, titular
+      exclusiva de los derechos de propiedad intelectual resultantes y ente
+      sancionador supremo a través de su Consejo Superior.
+  - nombre: Programa UBATIC
+    categoria: ConceptoJuridico
+    descripcion: >-
+      Programa institucional de la UBA destinado a financiar y acompañar
+      proyectos educativos bianuales que integran tecnologías digitales para el
+      mejoramiento de los procesos de enseñanza y aprendizaje.
+  - nombre: Director o Directora de Proyecto
+    categoria: SujetoDeDerecho
+    descripcion: >-
+      Docente responsable de la presentación, ejecución, administración de
+      fondos, guarda de bienes adquiridos y rendición de cuentas de un proyecto
+      seleccionado.
+  - nombre: Comisión Evaluadora
+    categoria: SujetoDeDerecho
+    descripcion: >-
+      Órgano encargado de analizar, evaluar y seleccionar las solicitudes
+      presentadas para el financiamiento complementario, asesorando a la
+      Secretaría de Asuntos Académicos y a la Comisión de Enseñanza.
+  - nombre: Unidad Académica Sede
+    categoria: SujetoDeDerecho
+    descripcion: >-
+      Facultad o dependencia de la UBA donde se radica el proyecto, receptora de
+      los fondos del subsidio y responsable del patrimoniamiento de los bienes
+      de uso adquiridos.
+  - nombre: Secretaría de Asuntos Académicos
+    categoria: SujetoDeDerecho
+    descripcion: >-
+      Dependencia del Rectorado encargada de la fijación de plazos, elevación de
+      propuestas de financiamiento al Consejo Superior y recomendación de
+      sanciones por incumplimientos.
 deontic_rules:
   - id: REG-01
     modalidad: OBLIGACION
-    sujeto_normado: Sujeto alcanzado por la disposición
-    conducta: Cumplimiento de las prescripciones del artículo
-    condicion: Vigencia de la norma
-    consecuencia: Responsabilidad por inobservancia legal
+    sujeto_normado: Secretaría de Asuntos Académicos y CITEP
+    conducta: >-
+      Registrar y comunicar la resolución a las Unidades Académicas, Secretarías
+      del Rectorado, Subsecretaría de Innovación y Calidad Académica, CITEP y
+      personas designadas.
+    condicion: Dictado del artículo 5º de la Resolución RESCS-2026-1720-UBA-REC.
+    consecuencia: >-
+      Tramitación administrativa y devolución de las actuaciones a la Secretaría
+      de Asuntos Académicos.
     palabras_clave:
-      - ARTÍCULO
-      - 'Regístrese,'
-      - comuníquese
-      - Unidades
+      - registro
+      - comunicación
+      - notificación
+      - trámite administrativo
+  - id: REG-02
+    modalidad: PROHIBICION
+    sujeto_normado: Equipos docentes postulantes
+    conducta: >-
+      Presentar un proyecto nuevo, cambiar de destinatarios o solicitar cambio
+      de la línea de proyecto aprobada originalmente.
+    condicion: >-
+      Presentación de solicitudes a la convocatoria de financiamiento
+      complementario UBATIC 2026/2027.
+    consecuencia: Inadmisibilidad y rechazo sin más trámite de la propuesta presentada.
+    palabras_clave:
+      - prohibición de modificación
+      - proyecto nuevo
+      - cambio de línea
+      - inadmisibilidad
+  - id: REG-03
+    modalidad: PROHIBICION
+    sujeto_normado: Director o Titular del proyecto
+    conducta: >-
+      Realizar pagos mediante tarjetas de crédito o débito personales, cheques
+      personales u otros medios no explícitamente admitidos.
+    condicion: Ejecución de fondos y gastos del subsidio UBATIC.
+    consecuencia: >-
+      Inadmisión de los comprobantes por la Dirección de Rendición de Cuentas,
+      desglose del comprobante y obligación de reintegrar su valor a la
+      Tesorería.
+    palabras_clave:
+      - medios de pago no admitidos
+      - tarjeta personal
+      - cheque personal
+      - desglose
+      - reintegro
+  - id: REG-04
+    modalidad: OBLIGACION
+    sujeto_normado: Director o Titular del proyecto
+    conducta: >-
+      Declarar y patrimoniar ante la Oficina de Patrimonio de la Unidad
+      Académica sede los bienes de uso y de capital adquiridos, manteniéndolos
+      bajo su guarda y conservación.
+    condicion: Adquisición de bienes con fondos provenientes del subsidio UBATIC.
+    consecuencia: >-
+      Titularidad del dominio a favor de la Universidad de Buenos Aires y
+      fiscalización por parte de la Dirección de Patrimonio del Rectorado.
+    palabras_clave:
+      - patrimoniamiento
+      - bienes de uso
+      - guarda
+      - propiedad UBA
+  - id: REG-05
+    modalidad: SANCION_NULIDAD
+    sujeto_normado: Beneficiarios / Titulares de proyectos subsidiados
+    conducta: >-
+      Incurrir en incumplimiento injustificado de rendiciones de cuentas,
+      presentar rendiciones defectuosas, omitir la devolución de fondos no
+      invertidos o aplicar incorrectamente los fondos.
+    condicion: >-
+      Verificación de irregularidades contables o administrativas en la
+      ejecución del subsidio.
+    consecuencia: >-
+      Anulación del subsidio por el Consejo Superior y obligación de restituir
+      la totalidad o parte de las sumas percibidas a valor actualizado (tasa
+      activa del Banco Nación).
+    palabras_clave:
+      - anulación de subsidio
+      - restitución de fondos
+      - rendición defectuosa
+      - incumplimiento
+      - interés activo
+  - id: REG-06
+    modalidad: OBLIGACION
+    sujeto_normado: Equipos docentes y autores del proyecto
+    conducta: >-
+      Mencionar expresamente 'Universidad de Buenos Aires' (sin la sigla UBA)
+      junto al nombre o sigla de la Unidad Académica correspondiente.
+    condicion: >-
+      Realización de publicaciones y presentaciones públicas derivadas de las
+      actividades del proyecto subsidiado.
+    consecuencia: >-
+      Elevación del informe de incumplimiento al Consejo Superior para la
+      aplicación de sanciones pertinentes.
+    palabras_clave:
+      - denominación oficial
+      - publicaciones
+      - propiedad intelectual
+      - crédito institucional
 ---
 ARTÍCULO 5°.- Regístrese, comuníquese las Unidades Académicas de los proyectos 
 seleccionados  en  la  Resolución  RESCS-2025-2341-E-UBA-REC,  a  las  Secretarías  

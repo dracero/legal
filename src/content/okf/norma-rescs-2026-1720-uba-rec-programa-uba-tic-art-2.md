@@ -16,21 +16,53 @@ relations:
   - type: CONCUERDA_CON
     target: norma-rescs-2026-1720-uba-rec-programa-uba-tic-art-1
 ontological_entities:
-  - nombre: RESCS-2026-1720-UBA-REC-Programa UBA-TIC
-    categoria: ConceptoNormativo
-    descripcion: Concepto normativo extraído del cuerpo legal cargado
+  - nombre: Integrantes de la solicitud
+    categoria: SujetoDeDerecho
+    descripcion: >-
+      Personas que postulan u conforman la presentación de una solicitud de
+      subsidio en la convocatoria del Programa UBA-TIC.
+  - nombre: Concurso de solicitudes de nueva asignación de subsidio
+    categoria: ConceptoJuridico
+    descripcion: >-
+      Procedimiento administrativo de convocatoria pública regulado para la
+      concesión de nuevos subsidios.
+  - nombre: Anexo I y Anexo II (ACS-2026-360-UBA-SG#REC / ACS-2026-359-UBA-SG#REC)
+    categoria: Objeto
+    descripcion: >-
+      Instrumentos normativos complementarios que fijan los requisitos y las
+      condiciones generales y específicas de la convocatoria.
 deontic_rules:
   - id: REG-01
     modalidad: OBLIGACION
-    sujeto_normado: Sujeto alcanzado por la disposición
-    conducta: Cumplimiento de las prescripciones del artículo
-    condicion: Vigencia de la norma
-    consecuencia: Responsabilidad por inobservancia legal
+    sujeto_normado: Integrantes de la solicitud
+    conducta: >-
+      Conocer y aceptar las condiciones generales y específicas establecidas en
+      el Anexo I y el Anexo II
+    condicion: Presentar una solicitud en el marco de la presente convocatoria
+    consecuencia: >-
+      Implicancia formal y vinculación legal directa con los términos y
+      reglamentaciones del concurso
     palabras_clave:
-      - ARTÍCULO
-      - Llamar
-      - concurso
-      - solicitudes
+      - presentación de solicitud
+      - conocer
+      - aceptar
+      - condiciones generales
+      - condiciones específicas
+  - id: REG-02
+    modalidad: OBLIGACION
+    sujeto_normado: Universidad de Buenos Aires / Autoridad convocante
+    conducta: >-
+      Régimen de llamado a concurso de solicitudes conforme a las bases del
+      programa y requisitos normados
+    condicion: Entrada en vigencia de la Resolución RESCS-2026-1720-UBA-REC
+    consecuencia: Apertura formal de la convocatoria para la asignación de subsidios UBA-TIC
+    palabras_clave:
+      - llamar a concurso
+      - subsidio
+      - bases
+      - requisitos
+      - Anexo I
+      - Anexo II
 ---
 ARTÍCULO 2°.- Llamar a concurso de solicitudes de nueva asignación de subsidio de 
 

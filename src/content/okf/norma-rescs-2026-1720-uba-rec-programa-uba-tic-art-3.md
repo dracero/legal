@@ -16,21 +16,42 @@ relations:
   - type: CONCUERDA_CON
     target: norma-rescs-2026-1720-uba-rec-programa-uba-tic-art-2
 ontological_entities:
-  - nombre: RESCS-2026-1720-UBA-REC-Programa UBA-TIC
-    categoria: ConceptoNormativo
-    descripcion: Concepto normativo extraído del cuerpo legal cargado
+  - nombre: Comisión Evaluadora
+    categoria: OrganoColegiado
+    descripcion: >-
+      Órgano encargado de evaluar los proyectos o presentaciones de la
+      convocatoria en el marco del Programa UBA-TIC.
+  - nombre: Susan DE ANGELIS
+    categoria: SujetoDeDerecho
+    descripcion: Persona física designada como integrante de la Comisión Evaluadora.
+  - nombre: Mónica GARDEY
+    categoria: SujetoDeDerecho
+    descripcion: Persona física designada como integrante de la Comisión Evaluadora.
+  - nombre: Alejandra AMBROSINO
+    categoria: SujetoDeDerecho
+    descripcion: Persona física designada como integrante de la Comisión Evaluadora.
+  - nombre: Convocatoria Programa UBA-TIC
+    categoria: ConceptoJuridico
+    descripcion: Proceso de selección y evaluación regido por el Programa UBA-TIC.
 deontic_rules:
   - id: REG-01
     modalidad: OBLIGACION
-    sujeto_normado: Sujeto alcanzado por la disposición
-    conducta: Cumplimiento de las prescripciones del artículo
-    condicion: Vigencia de la norma
-    consecuencia: Responsabilidad por inobservancia legal
+    sujeto_normado: 'Susan DE ANGELIS, Mónica GARDEY y Alejandra AMBROSINO'
+    conducta: >-
+      Integrar la Comisión Evaluadora y cumplir las funciones de evaluación en
+      la presente convocatoria
+    condicion: >-
+      A partir de la entrada en vigencia del Artículo 3 de la Resolución
+      RESCS-2026-1720-UBA-REC
+    consecuencia: >-
+      Asunción del cargo de miembros evaluadores y ejercicio de sus competencias
+      correspondientes
     palabras_clave:
-      - ARTÍCULO
-      - 'Designar,'
-      - miembros
-      - Comisión
+      - Designar
+      - Comisión Evaluadora
+      - Miembros
+      - Convocatoria
+      - UBA-TIC
 ---
 ARTÍCULO 3 °.- Designar, como miembros de la Comisión Evaluadora de la presente 
 convocatoria a:  

@@ -309,3 +309,4 @@ export class GeminiKeyRotator {
 
 // Instancia singleton para toda la aplicación
 export const geminiRotator = new GeminiKeyRotator();
+

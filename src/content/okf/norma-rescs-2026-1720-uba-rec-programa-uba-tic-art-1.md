@@ -14,21 +14,50 @@ status: Vigente
 last_updated: '2026-11-10'
 relations: []
 ontological_entities:
-  - nombre: RESCS-2026-1720-UBA-REC-Programa UBA-TIC
-    categoria: ConceptoNormativo
-    descripcion: Concepto normativo extraído del cuerpo legal cargado
+  - nombre: >-
+      Programa UBA-TIC Potenciar la enseñanza en el nivel superior a través de
+      las nuevas tecnologías
+    categoria: ConceptoJuridico
+    descripcion: >-
+      Marco institucional y normativo de la Universidad de Buenos Aires bajo el
+      cual se realiza la convocatoria a proyectos.
+  - nombre: Convocatoria para la presentación de proyectos
+    categoria: ActoAdministrativo
+    descripcion: >-
+      Proceso regulado para la recepción de solicitudes de subsidios destinadas
+      al refuerzo o profundización de proyectos.
+  - nombre: Subsidios
+    categoria: ObjetoJuridico
+    descripcion: >-
+      Asignación de recursos económicos destinados a financiar los proyectos
+      seleccionados.
+  - nombre: Proyectos aprobados mediante Resolución RESCS-2025-2341-E-UBA-REC
+    categoria: ConceptoJuridico
+    descripcion: >-
+      Proyectos académicos previamente aprobados que constituyen la base
+      exclusiva elegible para profundización o refuerzo.
 deontic_rules:
   - id: REG-01
-    modalidad: OBLIGACION
-    sujeto_normado: Sujeto alcanzado por la disposición
-    conducta: Cumplimiento de las prescripciones del artículo
-    condicion: Vigencia de la norma
-    consecuencia: Responsabilidad por inobservancia legal
+    modalidad: PERMISION
+    sujeto_normado: >-
+      Titulares o responsables de proyectos aprobados mediante Resolución
+      RESCS-2025-2341-E-UBA-REC
+    conducta: >-
+      Presentar proyectos para la asignación de subsidios en el marco del
+      Programa UBA-TIC
+    condicion: >-
+      Que la presentación tenga como finalidad la profundización y/o refuerzo de
+      los proyectos previamente aprobados por la Resolución
+      RESCS-2025-2341-E-UBA-REC
+    consecuencia: >-
+      Ingreso del proyecto al proceso de evaluación y eventual asignación de
+      subsidios
     palabras_clave:
-      - ARTÍCULO
-      - 'Establecer,'
-      - marco
-      - Programa
+      - convocatoria
+      - subsidios
+      - proyectos
+      - UBA-TIC
+      - Resolución RESCS-2025-2341-E-UBA-REC
 ---
 ARTÍCULO  1°.-  Establecer,  en  el  marco  del  Programa  UBA-TIC  "Potenciar  la  
 enseñanza  en  el  nivel  superior  a  través  de  las  nuevas  tecnologías",  la  convocatoria  
