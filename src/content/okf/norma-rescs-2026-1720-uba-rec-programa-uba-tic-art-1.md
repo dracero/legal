@@ -14,50 +14,39 @@ status: Vigente
 last_updated: '2026-11-10'
 relations: []
 ontological_entities:
-  - nombre: >-
-      Programa UBA-TIC Potenciar la enseñanza en el nivel superior a través de
-      las nuevas tecnologías
+  - nombre: Programa UBA-TIC
     categoria: ConceptoJuridico
     descripcion: >-
-      Marco institucional y normativo de la Universidad de Buenos Aires bajo el
-      cual se realiza la convocatoria a proyectos.
-  - nombre: Convocatoria para la presentación de proyectos
-    categoria: ActoAdministrativo
-    descripcion: >-
-      Proceso regulado para la recepción de solicitudes de subsidios destinadas
-      al refuerzo o profundización de proyectos.
-  - nombre: Subsidios
-    categoria: ObjetoJuridico
-    descripcion: >-
-      Asignación de recursos económicos destinados a financiar los proyectos
-      seleccionados.
-  - nombre: Proyectos aprobados mediante Resolución RESCS-2025-2341-E-UBA-REC
+      Programa para potenciar la enseñanza en el nivel superior a través de las
+      nuevas tecnologías
+  - nombre: Convocatoria de Subsidios
     categoria: ConceptoJuridico
     descripcion: >-
-      Proyectos académicos previamente aprobados que constituyen la base
-      exclusiva elegible para profundización o refuerzo.
+      Convocatoria para la presentación de proyectos destinados a la asignación
+      de subsidios de profundización y/o refuerzo
+  - nombre: Proyectos Aprobados
+    categoria: Objeto
+    descripcion: >-
+      Proyectos seleccionados previamente mediante la Resolución
+      RESCS-2025-2341-E-UBA-REC
 deontic_rules:
-  - id: REG-01
-    modalidad: PERMISION
-    sujeto_normado: >-
-      Titulares o responsables de proyectos aprobados mediante Resolución
-      RESCS-2025-2341-E-UBA-REC
+  - id: REG-00
+    modalidad: OBLIGACION
+    sujeto_normado: Universidad de Buenos Aires
     conducta: >-
-      Presentar proyectos para la asignación de subsidios en el marco del
-      Programa UBA-TIC
+      Establecer la convocatoria para la presentación de proyectos para la
+      asignación de subsidios
     condicion: >-
-      Que la presentación tenga como finalidad la profundización y/o refuerzo de
-      los proyectos previamente aprobados por la Resolución
-      RESCS-2025-2341-E-UBA-REC
+      En el marco del Programa UBA-TIC Potenciar la enseñanza en el nivel
+      superior a través de las nuevas tecnologías
     consecuencia: >-
-      Ingreso del proyecto al proceso de evaluación y eventual asignación de
-      subsidios
+      Apertura de la convocatoria orientada a profundización y refuerzo de
+      proyectos de la Resolución RESCS-2025-2341-E-UBA-REC
     palabras_clave:
       - convocatoria
       - subsidios
-      - proyectos
       - UBA-TIC
-      - Resolución RESCS-2025-2341-E-UBA-REC
+      - proyectos
 ---
 ARTÍCULO  1°.-  Establecer,  en  el  marco  del  Programa  UBA-TIC  "Potenciar  la  
 enseñanza  en  el  nivel  superior  a  través  de  las  nuevas  tecnologías",  la  convocatoria  

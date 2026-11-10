@@ -1,84 +1,186 @@
 # Sistema Neuro-Simbólico de Análisis Legal y Razonamiento Deóntico
 
-Plataforma Fullstack en **Astro SSR + Google GenAI (Gemini 3.6 Flash) + Embeddings de Hugging Face (all-MiniLM-L6-v2) + Neo4j Híbrido + Google OKF (Open Knowledge Format) + Open Policy Agent (OPA / Rego v1) + W3C SHACL**.
+Plataforma Fullstack construida sobre **Astro 5 SSR + Google GenAI (`gemini-3.6-flash`) + Embeddings Locales de Hugging Face (`Xenova/all-MiniLM-L6-v2`) + Neo4j Híbrido + Google OKF (Open Knowledge Format) + Open Policy Agent (OPA / Rego v1) + W3C SHACL**.
 
-El sistema es **100% agnóstico de dominio y guiado por documentos**: analiza estrictamente el documento normativo en PDF que el usuario carga, extrayendo de forma dinámica tanto su **ontología** (sujetos, conceptos jurídicos) como su **matriz deóntica** (obligaciones, prohibiciones, permisiones y consecuencias de nulidad/sanción).
+El sistema es **100% agnóstico de dominio y guiado estrictamente por documentos**: no posee normas preinstaladas ni reglas hardcodeadas; analiza exclusivamente el documento normativo en PDF que el usuario carga, extrayendo dinámicamente su **ontología** (sujetos, conceptos jurídicos) y su **matriz deóntica** (`OBLIGACION`, `PROHIBICION`, `PERMISION`, `SANCION_NULIDAD`).
 
 ---
 
-## 🚀 Inicio Rápido con un Único Comando (`npm run dev`)
+## 📋 Requisitos Previos
 
-Todo el ciclo de vida del sistema está automatizado dentro de **`npm run dev`** (`scripts/dev.js`). Al ejecutarlo:
+* **Node.js** `>= 22.0.0` (con `npm`)
+* **Docker** y **Docker Compose** (para la base de datos gráfica Neo4j local)
+* Una o más claves API de **Google Gemini** (`gemini-3.6-flash`)
 
-1. **Levanta automáticamente Neo4j local (`neo4j-data-legal`)** vía `docker compose up -d` en el puerto Bolt `7688` y HTTP Browser `7475`.
-2. **Inicializa el esquema y recrea los índices en Neo4j**:
-   - Índice vectorial de 384 dimensiones con el modelo local de **Hugging Face** (`Xenova/all-MiniLM-L6-v2`).
-   - Índice léxico Full-Text BM25 (`legal_normas_fulltext_index`).
-   - Restricciones ontológicas sobre nodos `LegalOKF`, `ConceptoOntologico` y `ReglaDeontica`.
-3. **Ejecuta los tests unitarios del motor deóntico OPA (Rego v1)** verificando el razonamiento formal sobre obligaciones, prohibiciones, permisiones y nulidades.
-4. **Inicia el servidor Fullstack Astro SSR** en `http://localhost:4321`.
+---
+
+## 🚀 Instalación y Puesta en Marcha (`npm run dev`)
 
 ```bash
-# 1. Instalar dependencias (primera vez)
+# 1. Instalar dependencias de Node.js
 npm install
 
-# 2. Levantar toda la arquitectura (Neo4j + Hugging Face Embeddings + OPA Test + Astro SSR)
+# 2. Crear el archivo .env a partir de la plantilla
+cp .env.example .env
+
+# 3. Editar .env y colocar al menos una clave en GEMINI_API_KEY
+# GEMINI_API_KEY=AIzaSy..., AIzaSy...
+
+# 4. Levantar toda la arquitectura con un solo comando
 npm run dev
 ```
 
-Una vez iniciado, abre **`http://localhost:4321`** en tu navegador.
+### ¿Qué automatiza `npm run dev` (`scripts/dev.js`)?
+
+1. **Neo4j Local (`docker compose up -d`):** Levanta el contenedor `neo4j-data-legal` (`neo4j:5.20.0-community`) exponiendo **Bolt en `7688`** y el **Browser Web en `http://localhost:7475`**.
+2. **Esquema e Índices en Neo4j (`scripts/seed-neo4j.js` + `src/lib/neo4j/schema.js`):**
+   * Reconcilia restricciones (`okf_id`, `ConceptoOntologico`, `ReglaDeontica`).
+   * Elimina índices heredados o incompatibles si existieran y asegura el índice vectorial de **384 dimensiones** (`legal_normas_vector_index`, similitud coseno) y el índice léxico Full-Text BM25 (`legal_normas_fulltext_index`).
+   * Sincroniza únicamente las normas `.md` existentes en `src/content/okf/` (inicialmente vacío si no se cargaron documentos).
+3. **Motor OPA Autocontenido (`scripts/opa-test.js` + `src/lib/opa/binary.js`):**
+   * Verifica o instala automáticamente el binario de **Open Policy Agent `v1.22.0`** dentro del directorio de la aplicación en **`./bin/opa`**.
+   * Ejecuta los tests unitarios de Rego v1 (`src/lib/opa/policies/legal_deontico_test.rego`).
+4. **Servidor Web Astro SSR:** Inicia la interfaz web y los endpoints de API en **`http://localhost:4321`**.
 
 ---
 
-## 📄 Modo de Operación: Basado Estrictamente en lo que Cargues
+## 🔑 Configuración de Variables de Entorno (`.env`) y Seguridad
 
-1. **Base de Conocimiento Limpia:** El sistema no posee leyes ni normas preinstaladas o hardcodeadas.
-2. **Carga de Documento Normativo en PDF:**
-   - Desde el panel superior, sube cualquier documento en PDF (ley, reglamento, términos contractuales, estatuto, código, etc.).
-   - El ingestor (`src/lib/okf/pdf-ingestor.ts`) segmenta automáticamente cada artículo/cláusula como una unidad atómica OKF.
-   - **Extracción Dinámica con Gemini 3.6 Flash:** Para cada unidad, el modelo extrae:
-     - **Entidades Ontológicas:** Sujetos de derecho, conceptos jurídicos regulados, definiciones y roles.
-     - **Matriz Deóntica:** Reglas deónticas con sus modalidades:
-       - `OBLIGACION`: Deberes positivos de hacer o dar.
-       - `PROHIBICION`: Deberes negativos de no hacer o conductas vedadas.
-       - `PERMISION`: Facultades y derechos subjetivos reconocidos.
-       - `SANCION_NULIDAD`: Ineficacias, nulidades o sanciones ante inobservancia.
-   - **Compuerta SHACL Pre-Ingesta (`legal:OKFNodeShape`):** Valida la conformidad estructural del artículo antes de persistir en disco y Neo4j.
-3. **Planteo del Caso Fáctico:**
-   - Escribe en lenguaje natural la situación de hecho, partes involucradas, conductas desplegadas y cláusulas o defensas invocadas.
-4. **Ejecución del Pipeline Neuro-Simbólico de 6 Etapas:**
-   - **Etapa 1 (Clasificador de Hechos):** Extrae mediante esquema estricto Zod los hechos, partes, conductas y omisiones con Gemini 3.6 Flash.
-   - **Etapa 2 (Motor Deóntico OPA):** Evalúa la matriz deóntica en Rego v1 de forma determinista (0 tokens LLM), contrastando omisiones contra obligaciones y conductas contra prohibiciones.
-   - **Etapa 3 (Recuperador Híbrido Neo4j):** Recupera los nodos normativos mediante búsqueda vectorial (Hugging Face MiniLM-L6-v2), BM25 y expansión relacional Cypher.
-   - **Etapa 4 (Validador SHACL):** Verifica `legal:LegalAnalysisShape` y aplica autorreparación si faltan nodos requeridos por OPA.
-   - **Etapa 5 (Agente Exégeta):** Gemini 3.6 Flash redacta las 4 secciones del dictamen basándose estricta y exclusivamente en los nodos recuperados y citando `[okf_id]`.
-   - **Etapa 6 (Auditor Epistémico):** SHACL audita que todas las citas normativas pertenezcan al grafo Neo4j del documento y valida 0 alucinaciones.
+El archivo `.gitignore` bloquea por defecto `.env`, `.env.*` (excepto `.env.example`), `/bin/`, `node_modules/`, `dist/`, `.astro/` y cachés locales para evitar filtrar credenciales o subir binarios compilados al repositorio.
 
----
+### Rotación Inteligente de API Keys de Gemini (`src/lib/gemini/key-rotator.ts`)
 
-## 🧠 Características Técnicas
-
-- **Modelo de Razonamiento:** `gemini-3.6-flash` configurado de forma estricta. Cero modelos fallback.
-- **Rotación Inteligente de API Keys:** Pool dinámico de claves con balanceo *Round-Robin* y *Failover automático*. Si una clave agota su cuota diaria (429 / `RESOURCE_EXHAUSTED`), entra en *cooldown* y el sistema conmuta instantáneamente a la siguiente clave activa sin interrumpir el dictamen.
-- **Embeddings:** `Xenova/all-MiniLM-L6-v2` (384 dimensiones) ejecutado localmente con ONNX Runtime (`@xenova/transformers`).
-- **Motor Deóntico Simbólico:** Open Policy Agent (`legal_deontico.rego`, paquete `data.legal.deontico`).
-- **Validación Estructural y Epistémica:** W3C SHACL (`rdf-validate-shacl`) bajo el espacio de nombres `http://antigravity.ai/ontologia/legal#`.
-- **Base de Datos Gráfica:** Neo4j 5.20 en Docker (`bolt://localhost:7688`).
-
----
-
-## 🔑 Configuración de Claves de Gemini en `.env`
-
-Puedes configurar una o múltiples claves API en el archivo `.env` para multiplicar tu cuota:
+Puedes configurar una o múltiples claves para distribuir carga y tolerar límites diarios del Free Tier (`20 req/día` por clave):
 
 ```env
-# Claves separadas por coma o punto y coma
-GEMINI_API_KEY=AIzaSyA..., AIzaSyB...
+GEMINI_MODEL=gemini-3.6-flash
+GEMINI_MAX_OUTPUT_TOKENS=32768
 
-# O variables individuales numeradas
-# GEMINI_API_KEY_1=AIzaSyA...
-# GEMINI_API_KEY_2=AIzaSyB...
+# Múltiples claves separadas por coma, punto y coma o salto de línea
+GEMINI_API_KEY=clave_1, clave_2
+
+# Alternativamente, variables numeradas individuales:
+# GEMINI_API_KEY_1=clave_1
+# GEMINI_API_KEY_2=clave_2
 ```
 
-* El sistema detecta automáticamente nuevas claves agregadas al archivo `.env` en caliente sin necesidad de reiniciar el servidor.
-* Los logs muestran enmascaradas las claves utilizadas (ej. `AQ.Ab8...ecxvJg`) y el estado del pool.
+* **Balanceo *Round-Robin*:** Alterna las peticiones entre todas las claves activas.
+* ***Failover* Automático:** Si una clave devuelve cuota diaria agotada (`429` / `RESOURCE_EXHAUSTED`), entra en *cooldown* calculado según `retryDelay` y conmuta instantáneamente a la siguiente clave disponible.
+* **Resiliencia ante 503 y RPM:** Ante límites por minuto (`RPM`) espera el *cooldown* corto automáticamente; ante alta demanda transitoria (`503` / `UNAVAILABLE`) aplica *backoff* sin bloquear la última clave disponible.
+* **Recarga en Caliente (*Hot-Reload*):** Si agregas o reemplazas claves en `.env`, el rotador recarga el archivo desde disco sin necesidad de reiniciar el servidor.
+
+### Embeddings Locales de Hugging Face (`src/lib/embeddings/huggingface.ts`)
+
+```env
+HUGGINGFACE_EMBEDDING_MODEL=Xenova/all-MiniLM-L6-v2
+HF_TOKEN=
+```
+
+* Se ejecutan **100% localmente** en Node.js mediante `@xenova/transformers` (ONNX Runtime, 384 dimensiones), sin invocar APIs remotas pagas ni consumir créditos de Hugging Face Inference Providers.
+
+### Binario de OPA en el Directorio de la Aplicación
+
+```env
+OPA_BIN_PATH=./bin/opa
+OPA_SERVER_URL=
+```
+
+* Tanto la aplicación (`src/lib/config.ts`) como los scripts (`scripts/opa-test.js`) resuelven OPA priorizando **`./bin/opa`** dentro del directorio raíz del proyecto (descargándolo o copiándolo automáticamente la primera vez si falta).
+
+---
+
+## 📄 Flujo de Trabajo y Arquitectura
+
+### 1. Ingesta Dinámica de PDF y Atomización OKF (`src/lib/okf/pdf-ingestor.ts`)
+* Sube un documento PDF desde el panel **Ingesta Dinámica de Normas**.
+* El ingestor extrae el texto y segmenta el cuerpo legal por artículos/cláusulas atómicas (`norma-<slug>-art-<n>`).
+* **Extracción por Lotes con `gemini-3.6-flash`:** Procesa hasta 10 artículos (o 35.000 caracteres) por solicitud para extraer sus **Entidades Ontológicas** y **Reglas Deónticas** (`OBLIGACION`, `PROHIBICION`, `PERMISION`, `SANCION_NULIDAD`), minimizando consumo de cuota y RPM.
+* **Compuerta SHACL Pre-Ingesta (`src/lib/shacl/shapes.ttl`):** Valida `legal:OKFNodeShape` antes de guardar el archivo `.md` en `src/content/okf/` e indexarlo con su embedding local de 384d y relaciones `[:CONCUERDA_CON]` en Neo4j.
+
+### 2. Pipeline Neuro-Simbólico de 6 Etapas (`src/lib/gemini/agent.ts`)
+1. **Clasificador de Hechos:** Extrae sujetos, rol evaluado, conductas, omisiones, resultados y defensas invocadas bajo esquema estricto Zod usando `gemini-3.6-flash`.
+2. **Motor Deóntico OPA (`legal_deontico.rego`):** Evalúa deterministamente (0 tokens LLM) la matriz deóntica de las normas cargadas frente a los hechos y omisiones.
+3. **Recuperador Híbrido Neo4j:** Combina búsqueda vectorial (Hugging Face 384d), Full-Text BM25, nodos obligatorios activados por OPA y expansión Cypher del vecindario.
+4. **Validador SHACL + Autorreparación:** Valida `legal:LegalAnalysisShape` sobre el subgrafo en RDF/Turtle; si faltan nodos exigidos por OPA, los recupera automáticamente desde Neo4j.
+5. **Agente Exégeta (I–IV):** Redacta en un pase integral las 4 secciones del dictamen jurídico basándose estrictamente en los nodos vigentes recuperados y citándolos como `[okf_id]`.
+6. **Auditor Epistémico Post-Generación:** Valida `legal:EpistemicAuditShape` verificando que el 100% de las citas `[norma-...]` existan en el subgrafo recuperado (cero citas alucinadas).
+
+---
+
+## 🧹 Borrar la Base de Datos y Dejar Todo en Blanco
+
+En cualquier momento puedes reiniciar el sistema por completo (eliminando el 100% de los nodos y relaciones en Neo4j, borrando todas las fichas `.md` en `src/content/okf/` y restaurando toda la interfaz en blanco):
+
+* **Desde el Front-End (`http://localhost:4321`):**
+  Haz clic en cualquiera de los botones de borrado disponibles en la interfaz:
+  * **`Borrar Base de Datos y Dejar en Blanco`** (en el panel superior de Ingesta PDF).
+  * **`Borrar Base`** (en la barra superior de estado).
+  * **`Limpiar grafo`** (sobre el lienzo del grafo Neo4j OKF).
+  Esto ejecuta `DELETE /api/laws/catalog` y restablece el grafo, el inspector de nodos, los formularios, las 6 tarjetas del pipeline, el visor de dictamen y las pestañas OPA/SHACL.
+* **Desde la Terminal:**
+  ```bash
+  npm run db:clear
+  ```
+
+---
+
+## 🛠️ Scripts Disponibles (`package.json`)
+
+| Comando | Descripción |
+| :--- | :--- |
+| `npm run dev` | Inicia Neo4j en Docker, inicializa esquema/índices, valida `./bin/opa` + `opa test` y levanta Astro SSR en `:4321`. |
+| `npm run dev:astro` | Inicia únicamente el servidor Astro en modo desarrollo. |
+| `npm run build` | Compila la aplicación SSR de producción en `dist/`. |
+| `npm run preview` | Ejecuta el servidor compilado (`dist/`). |
+| `npm run db:up` | Levanta el contenedor `neo4j-data-legal` con `docker compose up -d`. |
+| `npm run db:down` | Detiene el contenedor Neo4j. |
+| `npm run db:logs` | Muestra logs en vivo de Neo4j. |
+| `npm run db:seed` | Reconcilia índices de Neo4j y sincroniza los `.md` presentes en `src/content/okf/`. |
+| `npm run db:clear` | Borra todos los nodos/relaciones en Neo4j y elimina las fichas `.md` de `src/content/okf/`. |
+| `npm run opa:test` | Asegura `./bin/opa` y ejecuta los tests unitarios de políticas Rego v1. |
+
+---
+
+## 🔌 Endpoints de la API
+
+| Método y Ruta | Función |
+| :--- | :--- |
+| `POST /api/laws/upload` | Recibe un PDF (`multipart/form-data` o JSON), lo segmenta en artículos OKF, extrae ontología/deóntica, valida SHACL e indexa en Neo4j. |
+| `GET /api/laws/catalog` | Devuelve todos los nodos `LegalOKF` vigentes y sus relaciones en Neo4j. |
+| `DELETE /api/laws/catalog` | Ejecuta `MATCH (n) DETACH DELETE n` en Neo4j, elimina los archivos `src/content/okf/*.md` y revalida los índices vacíos. |
+| `POST /api/dictamen/stream` | Ejecuta en streaming NDJSON las 6 etapas del pipeline neuro-simbólico sobre el caso planteado. |
+
+---
+
+## 📁 Estructura del Proyecto
+
+```text
+data_legal/
+├── bin/opa                      # Binario local de OPA v1.22.0 (auto-instalado, ignorado en Git)
+├── scripts/
+│   ├── dev.js                   # Orquestador único de npm run dev
+│   ├── seed-neo4j.js            # Inicialización y sincronización Neo4j
+│   ├── clear-db.js              # Script CLI npm run db:clear
+│   └── opa-test.js              # Ejecutor de tests unitarios Rego v1
+├── src/
+│   ├── content/okf/             # Fichas atómicas OKF (.md) generadas al subir PDFs
+│   ├── lib/
+│   │   ├── config.ts            # Configuración unificada desde .env
+│   │   ├── embeddings/huggingface.ts  # Extractor local @xenova/transformers (384d)
+│   │   ├── gemini/agent.ts      # Orquestador del pipeline neuro-simbólico (6 etapas)
+│   │   ├── gemini/key-rotator.ts # Rotador multi-clave Round-Robin + Failover + Hot-Reload
+│   │   ├── neo4j/client.ts      # Cliente Neo4j híbrido (Vector + BM25 + Cypher + Clear)
+│   │   ├── neo4j/schema.js      # Reconciliación compartida de índices Neo4j
+│   │   ├── okf/pdf-ingestor.ts  # Parser PDF, segmentación atómica y extracción en lotes
+│   │   ├── opa/binary.js        # Resolutor e instalador de ./bin/opa
+│   │   ├── opa/evaluator.ts     # Evaluador Rego v1 de matriz deóntica
+│   │   ├── opa/policies/        # legal_deontico.rego y legal_deontico_test.rego
+│   │   └── shacl/               # shapes.ttl y validador/auditor epistémico RDF
+│   └── pages/
+│       ├── index.astro          # Interfaz web completa + visor de grafo + botón de borrado
+│       └── api/                 # Endpoints REST y streaming NDJSON
+├── .env.example                 # Plantilla documentada de variables de entorno
+├── .gitignore                   # Protección de .env, /bin/, dist/ y cachés
+├── docker-compose.yml           # Neo4j 5.20 local (puertos 7475 HTTP / 7688 Bolt)
+└── package.json
+```

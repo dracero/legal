@@ -1,8 +1,8 @@
 import path from 'path';
-import os from 'os';
-import fs from 'fs';
 import dns from 'dns';
 import dotenv from 'dotenv';
+import { geminiRotator } from './gemini/key-rotator.ts';
+import { resolveOpaBinary } from './opa/binary.js';
 
 // Priorizar resolución IPv4 para compatibilidad de red inmediata
 try {
@@ -10,19 +10,6 @@ try {
 } catch {}
 
 dotenv.config();
-
-function resolveOpaBinary(): string {
-  if (process.env.OPA_BIN_PATH && process.env.OPA_BIN_PATH.trim() !== '') {
-    return process.env.OPA_BIN_PATH.trim();
-  }
-  const localUserOpa = path.join(os.homedir(), '.local', 'bin', 'opa');
-  if (fs.existsSync(localUserOpa)) {
-    return localUserOpa;
-  }
-  return 'opa';
-}
-
-import { geminiRotator } from './gemini/key-rotator.ts';
 
 export function getGeminiApiKeys(): string[] {
   return geminiRotator.getAllKeys().map((k) => k.key);

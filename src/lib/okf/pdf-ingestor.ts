@@ -1,8 +1,8 @@
 import fs from 'fs/promises';
 import path from 'path';
 import matter from 'gray-matter';
-import { GoogleGenAI, Type } from '@google/genai';
-import { APP_CONFIG, getNextGeminiApiKey } from '../config.ts';
+import { Type } from '@google/genai';
+import { APP_CONFIG } from '../config.ts';
 import { geminiRotator } from '../gemini/key-rotator.ts';
 import {
   type OKFNode,
@@ -103,6 +103,72 @@ const DEONTIC_EXTRACTION_SCHEMA = {
   },
   required: ['ontological_entities', 'deontic_rules'],
 };
+
+const BATCH_DEONTIC_EXTRACTION_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    articles: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          article_index: { type: Type.INTEGER, description: 'Índice numérico (0-based) del artículo evaluado' },
+          ontological_entities: DEONTIC_EXTRACTION_SCHEMA.properties.ontological_entities,
+          deontic_rules: DEONTIC_EXTRACTION_SCHEMA.properties.deontic_rules,
+        },
+        required: ['article_index', 'ontological_entities', 'deontic_rules'],
+      },
+    },
+  },
+  required: ['articles'],
+};
+
+/**
+ * Extrae dinámicamente la Ontología y la Lógica Deóntica de un lote de artículos
+ * en una sola llamada a Gemini 3.6 Flash, optimizando el consumo de cuota y velocidad.
+ */
+async function extractOntologyAndDeonticBatch(
+  items: Array<{ index: number; title: string; body: string }>
+): Promise<Map<number, { ontological_entities: OntologicalEntity[]; deontic_rules: DeonticRule[] }>> {
+  const modelName = APP_CONFIG.gemini.model;
+  const resultMap = new Map<number, { ontological_entities: OntologicalEntity[]; deontic_rules: DeonticRule[] }>();
+
+  const promptBlocks = items
+    .map((item) => `[ARTICLE_INDEX=${item.index}] Título: ${item.title}\nTexto:\n${item.body}`)
+    .join('\n\n---\n\n');
+
+  const responseText = await geminiRotator.executeWithRotation(async (client) => {
+    const response = await client.models.generateContent({
+      model: modelName,
+      contents: `Analiza cada artículo listado por su [ARTICLE_INDEX] y extrae estrictamente su ontología y matriz deóntica:\n\n${promptBlocks}`,
+      config: {
+        systemInstruction:
+          'Eres un Jurista experto en Ontologías Jurídicas y Lógica Deóntica Formal. ' +
+          'Tu labor es extraer estrictamente del texto provisto para cada artículo [ARTICLE_INDEX] las entidades ontológicas (conceptos y sujetos) ' +
+          'y las reglas deónticas (modalidades OBLIGACION, PROHIBICION, PERMISION, SANCION_NULIDAD). ' +
+          'No inventes información ajena al texto. Devuelve el JSON conforme al esquema provisto incluyendo un objeto por cada article_index.',
+        responseMimeType: 'application/json',
+        responseSchema: BATCH_DEONTIC_EXTRACTION_SCHEMA,
+        maxOutputTokens: APP_CONFIG.gemini.maxOutputTokens,
+      },
+    });
+    return response.text || '{}';
+  }, `Extraer Lote Deóntico (${items.length} artículos)`);
+
+  const parsed = JSON.parse(responseText);
+  if (Array.isArray(parsed.articles)) {
+    for (const entry of parsed.articles) {
+      if (typeof entry.article_index === 'number') {
+        resultMap.set(entry.article_index, {
+          ontological_entities: Array.isArray(entry.ontological_entities) ? entry.ontological_entities : [],
+          deontic_rules: Array.isArray(entry.deontic_rules) ? entry.deontic_rules : [],
+        });
+      }
+    }
+  }
+
+  return resultMap;
+}
 
 /**
  * Extrae dinámicamente la Ontología y la Lógica Deóntica del texto del artículo
@@ -252,10 +318,8 @@ export async function segmentLawIntoAtomicArticles(
   }
 
   const { nodes: existingCatalogNodes } = await getAllCatalogOKFNodes();
-  const createdNodes: OKFNode[] = [];
 
-  for (let idx = 0; idx < atomicUnits.length; idx++) {
-    const unit = atomicUnits[idx];
+  const preparedUnits = atomicUnits.map((unit, idx) => {
     const safeArtSlug = unit.artNum.toLowerCase().replace(/[^a-z0-9]+/g, '-');
     const okf_id = `norma-${slugBase}-art-${safeArtSlug}`;
 
@@ -280,30 +344,75 @@ export async function segmentLawIntoAtomicArticles(
       }
     }
 
-    // Extracción dinámica de la Ontología y Lógica Deóntica con Gemini 3.6 Flash
-    const { ontological_entities, deontic_rules } = await extractOntologyAndDeonticLogicFromArticle(
-      unit.body,
-      title
-    );
+    return { index: idx, artNum: unit.artNum, body: unit.body.trim(), okf_id, title, relations };
+  });
 
-    createdNodes.push({
-      okf_id,
-      title,
+  // Extracción dinámica por lotes (hasta 10 artículos o 35.000 caracteres por llamada a Gemini)
+  const extractedMap = new Map<number, { ontological_entities: OntologicalEntity[]; deontic_rules: DeonticRule[] }>();
+  const batches: Array<typeof preparedUnits> = [];
+  let currentBatch: typeof preparedUnits = [];
+  let currentChars = 0;
+
+  for (const item of preparedUnits) {
+    if (currentBatch.length >= 10 || (currentBatch.length > 0 && currentChars + item.body.length > 35000)) {
+      batches.push(currentBatch);
+      currentBatch = [];
+      currentChars = 0;
+    }
+    currentBatch.push(item);
+    currentChars += item.body.length;
+  }
+  if (currentBatch.length > 0) batches.push(currentBatch);
+
+  for (const batch of batches) {
+    if (batch.length === 1) {
+      const item = batch[0];
+      const res = await extractOntologyAndDeonticLogicFromArticle(item.body, item.title);
+      extractedMap.set(item.index, res);
+      continue;
+    }
+
+    try {
+      const batchResult = await extractOntologyAndDeonticBatch(batch);
+      for (const [idx, val] of batchResult.entries()) {
+        extractedMap.set(idx, val);
+      }
+    } catch (batchErr: any) {
+      console.warn(`[Gemini Batch Extraction] Lote falló (${batchErr.message}), procesando artículos individualmente...`);
+    }
+
+    // Completar cualquier artículo faltante del lote de manera individual
+    for (const item of batch) {
+      if (!extractedMap.has(item.index)) {
+        const fallbackRes = await extractOntologyAndDeonticLogicFromArticle(item.body, item.title);
+        extractedMap.set(item.index, fallbackRes);
+      }
+    }
+  }
+
+  const createdNodes: OKFNode[] = preparedUnits.map((item) => {
+    const extracted = extractedMap.get(item.index) || {
+      ontological_entities: [],
+      deontic_rules: [],
+    };
+    return {
+      okf_id: item.okf_id,
+      title: item.title,
       node_type: 'Articulo',
       law_number: options.lawNumber,
-      article_number: unit.artNum,
+      article_number: item.artNum,
       hierarchy_level: 'Norma_Vigente',
       domain: 'Derecho_General',
       category: options.category || 'Normativa_Cargada',
       jurisdiction: options.jurisdiction || 'General',
       status: options.status || 'Vigente',
       last_updated: new Date().toISOString().slice(0, 10),
-      content: unit.body.trim(),
-      relations,
-      ontological_entities,
-      deontic_rules,
-    });
-  }
+      content: item.body,
+      relations: item.relations,
+      ontological_entities: extracted.ontological_entities,
+      deontic_rules: extracted.deontic_rules,
+    };
+  });
 
   return createdNodes;
 }

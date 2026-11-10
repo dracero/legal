@@ -16,6 +16,7 @@
     "db:down": "docker compose down",
     "db:logs": "docker compose logs -f neo4j",
     "db:seed": "node scripts/seed-neo4j.js",
+    "db:clear": "node scripts/clear-db.js",
     "opa:test": "node scripts/opa-test.js"
   },
   "dependencies": {

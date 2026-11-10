@@ -4,6 +4,7 @@ import path from 'path';
 import matter from 'gray-matter';
 import { APP_CONFIG } from '../config.ts';
 import { computeHuggingFaceEmbedding } from '../embeddings/huggingface.ts';
+import { applyNeo4jSchemaAndIndexes } from './schema.js';
 
 export interface OKFRelation {
   type: string;
@@ -53,6 +54,7 @@ export interface GraphEdge {
 }
 
 let driverInstance: Driver | null = null;
+let schemaInitialized = false;
 
 export function getNeo4jDriver(): Driver {
   if (!driverInstance) {
@@ -68,47 +70,12 @@ export async function initLegalNeo4jSchema(): Promise<void> {
   const driver = getNeo4jDriver();
   const session = driver.session();
   try {
-    await session.run(
-      `CREATE CONSTRAINT legal_okf_id_unique IF NOT EXISTS FOR (n:LegalOKF) REQUIRE n.okf_id IS UNIQUE`
-    );
-
-    await session.run(
-      `CREATE CONSTRAINT concepto_nombre_unique IF NOT EXISTS FOR (c:ConceptoOntologico) REQUIRE c.nombre IS UNIQUE`
-    );
-
-    await session.run(
-      `CREATE CONSTRAINT regla_deontica_id_unique IF NOT EXISTS FOR (r:ReglaDeontica) REQUIRE r.id IS UNIQUE`
-    );
-
-    await session.run(`
-      CREATE FULLTEXT INDEX ${APP_CONFIG.neo4j.fulltextIndexName} IF NOT EXISTS
-      FOR (n:LegalOKF) ON EACH [n.title, n.content, n.law_number, n.category, n.okf_id]
-    `);
-
-    try {
-      await session.run(`
-        CREATE VECTOR INDEX ${APP_CONFIG.neo4j.vectorIndexName} IF NOT EXISTS
-        FOR (n:LegalOKF) ON (n.embedding)
-        OPTIONS {
-          indexConfig: {
-            \`vector.similarity_function\`: 'cosine',
-            \`vector.dimensions\`: ${APP_CONFIG.neo4j.vectorDimensions}
-          }
-        }
-      `);
-    } catch {
-      await session.run(`DROP INDEX ${APP_CONFIG.neo4j.vectorIndexName} IF EXISTS`);
-      await session.run(`
-        CREATE VECTOR INDEX ${APP_CONFIG.neo4j.vectorIndexName} IF NOT EXISTS
-        FOR (n:LegalOKF) ON (n.embedding)
-        OPTIONS {
-          indexConfig: {
-            \`vector.similarity_function\`: 'cosine',
-            \`vector.dimensions\`: ${APP_CONFIG.neo4j.vectorDimensions}
-          }
-        }
-      `);
-    }
+    await applyNeo4jSchemaAndIndexes(session, {
+      vectorIndexName: APP_CONFIG.neo4j.vectorIndexName,
+      fulltextIndexName: APP_CONFIG.neo4j.fulltextIndexName,
+      vectorDimensions: APP_CONFIG.neo4j.vectorDimensions,
+    });
+    schemaInitialized = true;
   } finally {
     await session.close();
   }
@@ -272,6 +239,9 @@ export async function readLocalOKFFiles(): Promise<OKFNode[]> {
 }
 
 export async function ensureNeo4jSeeded(): Promise<{ count: number }> {
+  if (!schemaInitialized) {
+    await initLegalNeo4jSchema();
+  }
   const driver = getNeo4jDriver();
   const session = driver.session();
   try {
@@ -282,7 +252,6 @@ export async function ensureNeo4jSeeded(): Promise<{ count: number }> {
       return { count };
     }
 
-    await initLegalNeo4jSchema();
     const localNodes = await readLocalOKFFiles();
     for (const node of localNodes) {
       await upsertOKFNodeToNeo4j(node);
@@ -292,6 +261,46 @@ export async function ensureNeo4jSeeded(): Promise<{ count: number }> {
   } finally {
     await session.close();
   }
+}
+
+/**
+ * Elimina por completo todos los nodos y relaciones de Neo4j y todas las fichas
+ * OKF en disco (.md), dejando la base de datos en blanco (0 nodos).
+ */
+export async function clearDatabaseAndOKFContent(): Promise<{
+  deletedNodes: number;
+  deletedFiles: number;
+}> {
+  const driver = getNeo4jDriver();
+  const session = driver.session();
+  let deletedNodes = 0;
+
+  try {
+    const countRes = await session.run(`MATCH (n) RETURN count(n) AS total`);
+    deletedNodes = countRes.records[0]?.get('total')?.toNumber?.() ?? 0;
+
+    await session.run(`MATCH (n) DETACH DELETE n`);
+  } finally {
+    await session.close();
+  }
+
+  let deletedFiles = 0;
+  const okfDir = APP_CONFIG.okf.contentDir;
+  try {
+    await fs.mkdir(okfDir, { recursive: true });
+    const files = await fs.readdir(okfDir);
+    for (const file of files) {
+      if (file.endsWith('.md')) {
+        await fs.unlink(path.join(okfDir, file));
+        deletedFiles++;
+      }
+    }
+  } catch {}
+
+  schemaInitialized = false;
+  await initLegalNeo4jSchema();
+
+  return { deletedNodes, deletedFiles };
 }
 
 function parseJsonField<T>(field: any, defaultValue: T): T {
@@ -380,20 +389,34 @@ export async function hybridRetrieveAndExpandSubgraph(options: {
     // 2. Búsqueda Vectorial con Hugging Face Embeddings en Neo4j
     try {
       const queryVector = await computeHuggingFaceEmbedding(options.queryText);
-      const vecRes = await session.run(
-        `
-        CALL db.index.vector.queryNodes($indexName, $k, $queryVector)
-        YIELD node, score
-        WHERE node.status = 'Vigente'
-        RETURN node, score
-        ORDER BY score DESC
-        `,
-        {
-          indexName: APP_CONFIG.neo4j.vectorIndexName,
-          k: neo4j.int(options.limit || 8),
-          queryVector,
+      const runVectorQuery = () =>
+        session.run(
+          `
+          CALL db.index.vector.queryNodes($indexName, $k, $queryVector)
+          YIELD node, score
+          WHERE node.status = 'Vigente'
+          RETURN node, score
+          ORDER BY score DESC
+          `,
+          {
+            indexName: APP_CONFIG.neo4j.vectorIndexName,
+            k: neo4j.int(options.limit || 8),
+            queryVector,
+          }
+        );
+
+      let vecRes;
+      try {
+        vecRes = await runVectorQuery();
+      } catch (vecErr: any) {
+        if (vecErr.message?.includes('There is no such vector schema index')) {
+          schemaInitialized = false;
+          await initLegalNeo4jSchema();
+          vecRes = await runVectorQuery();
+        } else {
+          throw vecErr;
         }
-      );
+      }
 
       for (const rec of vecRes.records) {
         const props = rec.get('node').properties;

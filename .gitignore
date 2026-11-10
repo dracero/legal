@@ -33,6 +33,9 @@ Thumbs.db
 !.vscode/extensions.json
 !.vscode/settings.json
 
+# Binarios locales descargados para el entorno de ejecución (auto-instalados en ./bin/opa)
+/bin/
+
 # Cobertura y testing
 coverage/
 .nyc_output/

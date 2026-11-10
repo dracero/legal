@@ -4,6 +4,7 @@ import path from 'path';
 import matter from 'gray-matter';
 import { pipeline } from '@xenova/transformers';
 import dotenv from 'dotenv';
+import { applyNeo4jSchemaAndIndexes } from '../src/lib/neo4j/schema.js';
 
 dotenv.config();
 
@@ -65,47 +66,11 @@ export async function seedDatabase() {
   const session = driver.session();
   try {
     // 1. Restricciones e índices
-    await session.run(
-      `CREATE CONSTRAINT legal_okf_id_unique IF NOT EXISTS FOR (n:LegalOKF) REQUIRE n.okf_id IS UNIQUE`
-    );
-
-    await session.run(
-      `CREATE CONSTRAINT concepto_nombre_unique IF NOT EXISTS FOR (c:ConceptoOntologico) REQUIRE c.nombre IS UNIQUE`
-    );
-
-    await session.run(
-      `CREATE CONSTRAINT regla_deontica_id_unique IF NOT EXISTS FOR (r:ReglaDeontica) REQUIRE r.id IS UNIQUE`
-    );
-
-    await session.run(`
-      CREATE FULLTEXT INDEX ${fulltextIndexName} IF NOT EXISTS
-      FOR (n:LegalOKF) ON EACH [n.title, n.content, n.law_number, n.category, n.okf_id]
-    `);
-
-    try {
-      await session.run(`
-        CREATE VECTOR INDEX ${vectorIndexName} IF NOT EXISTS
-        FOR (n:LegalOKF) ON (n.embedding)
-        OPTIONS {
-          indexConfig: {
-            \`vector.similarity_function\`: 'cosine',
-            \`vector.dimensions\`: ${vectorDimensions}
-          }
-        }
-      `);
-    } catch {
-      await session.run(`DROP INDEX ${vectorIndexName} IF EXISTS`);
-      await session.run(`
-        CREATE VECTOR INDEX ${vectorIndexName} IF NOT EXISTS
-        FOR (n:LegalOKF) ON (n.embedding)
-        OPTIONS {
-          indexConfig: {
-            \`vector.similarity_function\`: 'cosine',
-            \`vector.dimensions\`: ${vectorDimensions}
-          }
-        }
-      `);
-    }
+    await applyNeo4jSchemaAndIndexes(session, {
+      vectorIndexName,
+      fulltextIndexName,
+      vectorDimensions,
+    });
 
     // 2. Sincronizar ÚNICAMENTE los archivos subidos por el usuario que existan en el directorio OKF
     await fs.mkdir(OKF_DIR, { recursive: true });

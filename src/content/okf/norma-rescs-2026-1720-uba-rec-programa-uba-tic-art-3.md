@@ -17,41 +17,28 @@ relations:
     target: norma-rescs-2026-1720-uba-rec-programa-uba-tic-art-2
 ontological_entities:
   - nombre: Comisión Evaluadora
-    categoria: OrganoColegiado
-    descripcion: >-
-      Órgano encargado de evaluar los proyectos o presentaciones de la
-      convocatoria en el marco del Programa UBA-TIC.
+    categoria: SujetoDeDerecho
+    descripcion: Órgano colegiado encargado de evaluar las solicitudes presentadas
   - nombre: Susan DE ANGELIS
     categoria: SujetoDeDerecho
-    descripcion: Persona física designada como integrante de la Comisión Evaluadora.
+    descripcion: Miembro designado de la Comisión Evaluadora
   - nombre: Mónica GARDEY
     categoria: SujetoDeDerecho
-    descripcion: Persona física designada como integrante de la Comisión Evaluadora.
+    descripcion: Miembro designado de la Comisión Evaluadora
   - nombre: Alejandra AMBROSINO
     categoria: SujetoDeDerecho
-    descripcion: Persona física designada como integrante de la Comisión Evaluadora.
-  - nombre: Convocatoria Programa UBA-TIC
-    categoria: ConceptoJuridico
-    descripcion: Proceso de selección y evaluación regido por el Programa UBA-TIC.
+    descripcion: Miembro designado de la Comisión Evaluadora
 deontic_rules:
-  - id: REG-01
+  - id: REG-02
     modalidad: OBLIGACION
     sujeto_normado: 'Susan DE ANGELIS, Mónica GARDEY y Alejandra AMBROSINO'
-    conducta: >-
-      Integrar la Comisión Evaluadora y cumplir las funciones de evaluación en
-      la presente convocatoria
-    condicion: >-
-      A partir de la entrada en vigencia del Artículo 3 de la Resolución
-      RESCS-2026-1720-UBA-REC
-    consecuencia: >-
-      Asunción del cargo de miembros evaluadores y ejercicio de sus competencias
-      correspondientes
+    conducta: Integrar la Comisión Evaluadora de la convocatoria
+    condicion: Designación efectuada por la resolución
+    consecuencia: Asunción de funciones de evaluación de las solicitudes
     palabras_clave:
-      - Designar
+      - designar
       - Comisión Evaluadora
-      - Miembros
-      - Convocatoria
-      - UBA-TIC
+      - miembros
 ---
 ARTÍCULO 3 °.- Designar, como miembros de la Comisión Evaluadora de la presente 
 convocatoria a:  

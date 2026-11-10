@@ -48,13 +48,13 @@ try {
         <button
           id="btn-clear-catalog"
           type="button"
-          title="Eliminar todos los documentos cargados y reiniciar la base a 0 nodos"
-          class="flex items-center gap-1 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2 py-1 text-[11px] font-medium text-rose-300 transition hover:bg-rose-500/20 cursor-pointer"
+          title="Borrar toda la base de datos Neo4j, fichas OKF y dejar la pantalla completamente en blanco"
+          class="js-clear-db-btn flex items-center gap-1 rounded-lg border border-rose-500/40 bg-rose-500/15 px-2.5 py-1 text-[11px] font-semibold text-rose-200 transition hover:bg-rose-500/30 cursor-pointer"
         >
           <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
           </svg>
-          Vaciar Base
+          Borrar Base
         </button>
         <span class="flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-amber-300">
           <span class="h-2 w-2 rounded-full bg-amber-400"></span>
@@ -94,10 +94,21 @@ try {
             El sistema desglosa el documento en artículos o cláusulas atómicas OKF, extrae la <strong>Ontología</strong> (conceptos, sujetos) y la <strong>Lógica Deóntica</strong> (obligaciones, prohibiciones, permisiones y sanciones) con Gemini 3.6 Flash, valida mediante SHACL e indexa en Neo4j.
           </p>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center gap-2">
           <span class="rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-1.5 text-xs text-slate-300">
             100% Dinámico: Basado en el Documento Cargado
           </span>
+          <button
+            id="btn-clear-panel"
+            type="button"
+            title="Vaciar Neo4j, borrar fichas OKF y dejar toda la interfaz en blanco"
+            class="js-clear-db-btn flex items-center gap-1.5 rounded-lg border border-rose-500/50 bg-rose-600/20 px-3 py-1.5 text-xs font-semibold text-rose-200 transition hover:bg-rose-600/35 cursor-pointer"
+          >
+            <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            Borrar Base de Datos y Dejar en Blanco
+          </button>
         </div>
       </div>
 
@@ -364,6 +375,13 @@ try {
           <div id="tab-graph" class="side-tab-pane space-y-4">
             <div class="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
               <span class="font-mono text-[10px] text-slate-400">Click en un nodo para inspeccionar ontología y deóntica</span>
+              <button
+                type="button"
+                title="Borrar nodos del grafo y reiniciar en blanco"
+                class="js-clear-db-btn inline-flex items-center gap-1 rounded border border-rose-500/35 bg-rose-500/10 px-2 py-0.5 text-[10px] font-medium text-rose-300 transition hover:bg-rose-500/25 cursor-pointer"
+              >
+                Limpiar grafo
+              </button>
             </div>
 
             <!-- Lienzo SVG del Subgrafo -->
@@ -425,10 +443,41 @@ try {
   </main>
 
   <script define:vars={{ initialCatalog }}>
-    // Estado global en el cliente
+    // Estado global en el cliente y snapshots de plantillas en blanco
     let currentGraphNodes = initialCatalog.nodes || [];
     let currentGraphEdges = initialCatalog.edges || [];
     let selectedNodeId = currentGraphNodes[0]?.okf_id || null;
+
+    const INITIAL_DICTAMEN_HTML = document.getElementById('dictamen-viewer')?.innerHTML || '';
+    const INITIAL_OPA_HTML = document.getElementById('opa-decision-container')?.innerHTML || '';
+    const INITIAL_SHACL_HTML = document.getElementById('shacl-report-container')?.innerHTML || '';
+    const INITIAL_STEP_DETAILS = Array.from(document.querySelectorAll('[data-step-card]')).map((card) => ({
+      step: card.getAttribute('data-step-card'),
+      detail: card.querySelector('.step-detail')?.textContent || '',
+    }));
+
+    function resetInspectorToBlank() {
+      const idEl = document.getElementById('inspector-okf-id');
+      const statusEl = document.getElementById('inspector-status');
+      const titleEl = document.getElementById('inspector-title');
+      const metaEl = document.getElementById('inspector-meta');
+      const contentEl = document.getElementById('inspector-content');
+      const rulesBox = document.getElementById('inspector-deontic-rules');
+      const entBox = document.getElementById('inspector-ontology-entities');
+
+      if (idEl) idEl.textContent = 'sin-nodo';
+      if (statusEl) {
+        statusEl.textContent = 'En blanco';
+        statusEl.className = 'rounded border border-slate-700 bg-slate-800/80 px-2 py-0.5 text-[10px] font-semibold text-slate-400';
+      }
+      if (titleEl) {
+        titleEl.textContent = 'Base de conocimiento vacía. Cargue un PDF normativo para inspeccionar artículos.';
+      }
+      if (metaEl) metaEl.textContent = '';
+      if (contentEl) contentEl.textContent = '';
+      if (rulesBox) rulesBox.innerHTML = '';
+      if (entBox) entBox.innerHTML = '';
+    }
 
     // 1. Renderizador del Grafo SVG de Neo4j
     function renderNeo4jGraph(nodes, edges, highlightId = null) {
@@ -437,9 +486,20 @@ try {
       svg.innerHTML = '';
 
       const countEl = document.getElementById('tab-graph-count');
-      if (countEl) countEl.textContent = String(nodes.length);
+      if (countEl) countEl.textContent = String((nodes || []).length);
 
-      if (!nodes || nodes.length === 0) return;
+      if (!nodes || nodes.length === 0) {
+        const emptyLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        emptyLabel.setAttribute('x', '300');
+        emptyLabel.setAttribute('y', '190');
+        emptyLabel.setAttribute('text-anchor', 'middle');
+        emptyLabel.setAttribute('fill', '#64748b');
+        emptyLabel.setAttribute('font-size', '13');
+        emptyLabel.textContent = 'Grafo vacío (0 nodos OKF)';
+        svg.appendChild(emptyLabel);
+        resetInspectorToBlank();
+        return;
+      }
 
       const width = 600;
       const height = 380;
@@ -535,7 +595,10 @@ try {
       if (!node) return;
       document.getElementById('inspector-okf-id').textContent = node.okf_id;
       const statusEl = document.getElementById('inspector-status');
-      if (statusEl) statusEl.textContent = node.status || 'Vigente';
+      if (statusEl) {
+        statusEl.textContent = node.status || 'Vigente';
+        statusEl.className = 'rounded border border-emerald-500/30 bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-300';
+      }
       document.getElementById('inspector-title').textContent = node.title;
       document.getElementById('inspector-meta').textContent =
         `${node.law_number}${node.article_number ? ' • Art. ' + node.article_number : ''} • Estado: ${node.status || 'Vigente'} • Vía: ${node.retrieval_reason || 'Grafo OKF'}`;
@@ -728,14 +791,92 @@ try {
       document.getElementById('pdf-upload-section')?.scrollIntoView({ behavior: 'smooth' });
     });
 
-    // Vaciar base de leyes
-    document.getElementById('btn-clear-catalog')?.addEventListener('click', async () => {
-      if (!confirm('¿Desea vaciar por completo la base de normas y volver a 0 nodos?')) return;
-      const res = await fetch('/api/laws/catalog', { method: 'DELETE' });
-      if (res.ok) {
-        await refreshCatalogGraph();
-        alert('Base de conocimiento vaciada. Ahora puede cargar nuevas normas en PDF.');
+    function resetWorkspaceToBlank() {
+      currentGraphNodes = [];
+      currentGraphEdges = [];
+      selectedNodeId = null;
+
+      const headerCount = document.getElementById('header-node-count');
+      if (headerCount) headerCount.textContent = '0';
+
+      const emptyBanner = document.getElementById('empty-catalog-banner');
+      if (emptyBanner) emptyBanner.classList.remove('hidden');
+
+      pdfForm?.reset();
+      if (pdfLabel) pdfLabel.textContent = 'Seleccionar o arrastrar PDF (.pdf)';
+      if (pdfResultBox) {
+        pdfResultBox.innerHTML = '';
+        pdfResultBox.classList.add('hidden');
       }
+
+      const casoTextarea = document.getElementById('textarea-caso');
+      if (casoTextarea) casoTextarea.value = '';
+
+      if (statusBadge) statusBadge.textContent = 'Listo para ejecutar el Pipeline Neuro-Simbólico (6 etapas).';
+      if (charCounter) charCounter.textContent = '0 palabras';
+      if (viewer) viewer.innerHTML = INITIAL_DICTAMEN_HTML;
+
+      INITIAL_STEP_DETAILS.forEach(({ step, detail }) => {
+        const card = document.querySelector(`[data-step-card="${step}"]`);
+        if (!card) return;
+        card.className = 'rounded-xl border border-slate-800 bg-slate-950/80 p-3 transition';
+        const badge = card.querySelector('.step-badge');
+        if (badge) {
+          badge.className = 'step-badge rounded bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-400';
+          badge.textContent = 'Pendiente';
+        }
+        const detailEl = card.querySelector('.step-detail');
+        if (detailEl) detailEl.textContent = detail;
+      });
+
+      const opaBox = document.getElementById('opa-decision-container');
+      if (opaBox) opaBox.innerHTML = INITIAL_OPA_HTML;
+
+      const shaclBox = document.getElementById('shacl-report-container');
+      if (shaclBox) shaclBox.innerHTML = INITIAL_SHACL_HTML;
+
+      activateSideTab('tab-graph');
+      renderNeo4jGraph([], [], null);
+    }
+
+    // Borrar base de datos y dejar todo en blanco (unificado en todos los botones .js-clear-db-btn)
+    async function handleClearDatabase() {
+      if (!confirm('¿Desea borrar por completo la base de datos Neo4j, eliminar los documentos cargados y dejar toda la interfaz en blanco?')) {
+        return;
+      }
+
+      const clearBtns = Array.from(document.querySelectorAll('.js-clear-db-btn'));
+      clearBtns.forEach((btn) => {
+        btn.disabled = true;
+        btn.classList.add('opacity-60');
+      });
+
+      try {
+        const res = await fetch('/api/laws/catalog', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+        resetWorkspaceToBlank();
+        if (statusBadge) {
+          statusBadge.textContent = '✓ Base de datos borrada y espacio de trabajo en blanco (0 nodos).';
+        }
+      } catch (err) {
+        if (statusBadge) {
+          statusBadge.textContent = `Error al borrar la base de datos: ${err.message}`;
+        }
+      } finally {
+        clearBtns.forEach((btn) => {
+          btn.disabled = false;
+          btn.classList.remove('opacity-60');
+        });
+      }
+    }
+
+    document.querySelectorAll('.js-clear-db-btn').forEach((btn) => {
+      btn.addEventListener('click', handleClearDatabase);
     });
 
     // 4. Formateo de Markdown con Citas Interactivas [okf_id]
