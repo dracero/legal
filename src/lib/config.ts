@@ -56,4 +56,7 @@ export const APP_CONFIG = {
   okf: {
     contentDir: path.resolve(process.env.OKF_CONTENT_DIR || './src/content/okf'),
   },
+  prompts: {
+    dir: path.resolve(process.env.PROMPTS_DIR || './src/lib/prompts'),
+  },
 };

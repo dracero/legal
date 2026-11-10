@@ -4,6 +4,7 @@ import matter from 'gray-matter';
 import { Type } from '@google/genai';
 import { APP_CONFIG } from '../config.ts';
 import { geminiRotator } from '../gemini/key-rotator.ts';
+import { loadPrompt } from '../prompts/loader.ts';
 import {
   type OKFNode,
   type OKFRelation,
@@ -142,11 +143,7 @@ async function extractOntologyAndDeonticBatch(
       model: modelName,
       contents: `Analiza cada artículo listado por su [ARTICLE_INDEX] y extrae estrictamente su ontología y matriz deóntica:\n\n${promptBlocks}`,
       config: {
-        systemInstruction:
-          'Eres un Jurista experto en Ontologías Jurídicas y Lógica Deóntica Formal. ' +
-          'Tu labor es extraer estrictamente del texto provisto para cada artículo [ARTICLE_INDEX] las entidades ontológicas (conceptos y sujetos) ' +
-          'y las reglas deónticas (modalidades OBLIGACION, PROHIBICION, PERMISION, SANCION_NULIDAD). ' +
-          'No inventes información ajena al texto. Devuelve el JSON conforme al esquema provisto incluyendo un objeto por cada article_index.',
+        systemInstruction: loadPrompt('deontic-batch-extractor.md'),
         responseMimeType: 'application/json',
         responseSchema: BATCH_DEONTIC_EXTRACTION_SCHEMA,
         maxOutputTokens: APP_CONFIG.gemini.maxOutputTokens,
@@ -185,11 +182,7 @@ export async function extractOntologyAndDeonticLogicFromArticle(
       model: modelName,
       contents: `Analiza el siguiente artículo normativo y extrae su ontología y lógica deóntica:\n\nArtículo: ${articleTitle}\n\nTexto:\n${articleText}`,
       config: {
-        systemInstruction:
-          'Eres un Jurista experto en Ontologías Jurídicas y Lógica Deóntica Formal. ' +
-          'Tu labor es extraer estrictamente del texto provisto las entidades ontológicas (conceptos y sujetos) ' +
-          'y las reglas deónticas (modalidades OBLIGACION, PROHIBICION, PERMISION, SANCION_NULIDAD). ' +
-          'No inventes información ajena al texto. Devuelve el JSON conforme al esquema provisto.',
+        systemInstruction: loadPrompt('deontic-article-extractor.md'),
         responseMimeType: 'application/json',
         responseSchema: DEONTIC_EXTRACTION_SCHEMA,
       },

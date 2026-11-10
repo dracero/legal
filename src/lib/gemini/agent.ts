@@ -1,7 +1,8 @@
 import { z } from 'zod';
-import { GoogleGenAI, Type } from '@google/genai';
-import { APP_CONFIG, getNextGeminiApiKey } from '../config.ts';
+import { Type } from '@google/genai';
+import { APP_CONFIG } from '../config.ts';
 import { geminiRotator } from './key-rotator.ts';
+import { loadPrompt } from '../prompts/loader.ts';
 import { evaluarEnServidorOPA, type HechosCaso, type PolicyDecision } from '../opa/evaluator.ts';
 import {
   hybridRetrieveAndExpandSubgraph,
@@ -127,8 +128,7 @@ export async function extractFactsFromCase(
   casoPlanteado: string
 ): Promise<{ hechos: HechosCaso; modelUsed: string }> {
   const text = await invokeGemini({
-    systemInstruction:
-      'Eres un Jurista y Auditor Legal experto. Analiza la descripción fáctica del caso planteado y extrae con máxima rigurosidad las variables fácticas, sujetos, conductas, omisiones y defensas invocadas. Devuelve únicamente el objeto JSON conforme al esquema estricto provisto.',
+    systemInstruction: loadPrompt('fact-extractor.md'),
     contents: `Caso planteado para análisis jurídico:\n${casoPlanteado}`,
     responseMimeType: 'application/json',
     responseSchema: GEMINI_FACT_EXTRACTION_SCHEMA,
@@ -174,6 +174,70 @@ export const CAPITULOS_DICTAMEN: CapituloConfig[] = [
 ];
 
 /**
+ * Divide un dictamen Markdown en las 4 secciones configuradas respetando encabezados ## Sección.
+ */
+export function splitDictamenIntoSections(
+  text: string
+): Array<{ id: string; titulo: string; markdown: string }> {
+  const sectionRegex =
+    /##\s*Secci[oó]n\s*([I|V|X]+)[^\n]*\n([\s\S]*?)(?=(?:##\s*Secci[oó]n\s*[I|V|X]+)|$)/gi;
+  const matches = Array.from(text.matchAll(sectionRegex));
+  const results: Array<{ id: string; titulo: string; markdown: string }> = [];
+
+  if (matches.length >= 4) {
+    for (let i = 0; i < CAPITULOS_DICTAMEN.length; i++) {
+      const cap = CAPITULOS_DICTAMEN[i];
+      const match = matches[i];
+      const body = match ? match[0].trim() : `## ${cap.titulo}\n\n(Sección desarrollada)`;
+      results.push({ id: cap.id, titulo: cap.titulo, markdown: body });
+    }
+  } else {
+    results.push({
+      id: CAPITULOS_DICTAMEN[0].id,
+      titulo: CAPITULOS_DICTAMEN[0].titulo,
+      markdown: text,
+    });
+    for (let i = 1; i < CAPITULOS_DICTAMEN.length; i++) {
+      results.push({
+        id: CAPITULOS_DICTAMEN[i].id,
+        titulo: CAPITULOS_DICTAMEN[i].titulo,
+        markdown: `*(Contenido integrado en la resolución general)*`,
+      });
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Envuelve entre corchetes citas exactas de okf_id que aparezcan sueltas en el texto
+ * y normaliza sub-anclas no registradas (ej. [norma-x-art-5-anexo] -> [norma-x-art-5]) con 0 tokens LLM.
+ */
+export function wrapBareValidCitations(markdownText: string, validNodes: OKFNode[]): string {
+  let updated = markdownText;
+  const sortedNodes = [...validNodes].sort((a, b) => b.okf_id.length - a.okf_id.length);
+  const validIdSet = new Set(validNodes.map((n) => n.okf_id.toLowerCase()));
+
+  for (const node of sortedNodes) {
+    const escapedId = node.okf_id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // 1. Envolver ocurrencias exactas sin corchetes
+    const bareRegex = new RegExp(`(?<!\\[)(?<![a-zA-Z0-9_-])${escapedId}(?![a-zA-Z0-9_-])`, 'gi');
+    updated = updated.replace(bareRegex, `[${node.okf_id}]`);
+
+    // 2. Normalizar sub-anclas (ej. -anexo, -inc-1) al okf_id padre válido más específico
+    const subAnchorRegex = new RegExp(`\\[(${escapedId}(?:-[a-z0-9_-]+)+)\\]`, 'gi');
+    updated = updated.replace(subAnchorRegex, (fullMatch, innerId) => {
+      if (validIdSet.has(String(innerId).toLowerCase())) {
+        return fullMatch;
+      }
+      return `[${node.okf_id}]`;
+    });
+  }
+
+  return updated;
+}
+
+/**
  * PASO 5: Genera el Dictamen Completo en un pase integral optimizado
  * garantizando coherencia argumental, reduciendo latencia y optimizando el consumo de cuota de Gemini 3.6 Flash.
  */
@@ -182,26 +246,9 @@ export async function generateFullDictamen(
   directivasOPA: PolicyDecision,
   subgrafoOKF: OKFNode[]
 ): Promise<Array<{ id: string; titulo: string; markdown: string }>> {
-  const systemPrompt = `Actúa como Jurista y Auditor Legal experto.
-Redacta el Dictamen Jurídico exhaustivo, riguroso y doctrinal estructurado estrictamente en las siguientes cuatro secciones con encabezados Markdown nivel 2:
-
-## Sección I: Encuadre Fáctico, Sujetos y Calificación Jurídica de las Conductas
-(Identificación precisa de las partes, sus roles normados, conductas analizadas y defensas/cláusulas invocadas).
-
-## Sección II: Exégesis Normativa y Matriz Deóntica del Documento Cargado
-(Análisis artículo por artículo del subgrafo OKF vigente, deberes, prohibiciones, permisiones y prelación de Kelsen).
-
-## Sección III: Subsunción Fáctica: Incumplimientos, Infracciones y Consecuencias Jurídicas
-(Contraste riguroso entre las conductas y la matriz deóntica OPA: deberes incumplidos, prohibiciones vulneradas y nulidades aplicables).
-
-## Sección IV: Conclusiones, Dictamen Fundado y Escenarios Contrafácticos
-(Resolución jurídica conclusiva fundada exclusivamente en el texto legal, hipótesis contrafácticas de cumplimiento e implicancias prácticas).
-
-RESTRICCIÓN SIMBÓLICA ESTRICTA:
-1. El análisis debe basarse ESTRICTA Y EXCLUSIVAMENTE en los nodos OKF provistos en 'nodosOKFVigentes'. No menciones ni inventes normas fuera de este conjunto.
-2. Debes obedecer rigurosamente las directivas deterministas de OPA adjuntas (deberes, prohibiciones, nulidades y prelación).
-3. Cita obligatoriamente cada norma utilizada mediante su identificador [okf_id] entre corchetes (ejemplo: [${subgrafoOKF[0]?.okf_id || 'norma-id'}]).
-4. Redacta en Markdown académico profundo, riguroso y analítico.`;
+  const systemPrompt = loadPrompt('dictamen-exegesis.md', {
+    exampleOkfId: subgrafoOKF[0]?.okf_id || 'norma-id',
+  });
 
   const text = await invokeGemini({
     systemInstruction: systemPrompt,
@@ -222,36 +269,36 @@ RESTRICCIÓN SIMBÓLICA ESTRICTA:
     maxOutputTokens: APP_CONFIG.gemini.maxOutputTokens,
   });
 
-  // Dividir el dictamen en las 4 secciones según los encabezados ## Sección
-  const sectionRegex = /##\s*Secci[oó]n\s*([I|V|X]+)[^\n]*\n([\s\S]*?)(?=(?:##\s*Secci[oó]n\s*[I|V|X]+)|$)/gi;
-  const matches = Array.from(text.matchAll(sectionRegex));
+  return splitDictamenIntoSections(text);
+}
 
-  const results: Array<{ id: string; titulo: string; markdown: string }> = [];
+/**
+ * Pase único de auto-reparación epistémica cuando Etapa 6 detecta citas alucinadas o faltantes.
+ */
+export async function repairDictamenEpistemicCitations(params: {
+  dictamenMarkdown: string;
+  validNodes: OKFNode[];
+  unverifiedCitations: string[];
+  citedOkfIds: string[];
+}): Promise<string> {
+  const systemPrompt = loadPrompt('epistemic-repair.md', {
+    exampleOkfId: params.validNodes[0]?.okf_id || 'norma-id',
+  });
 
-  if (matches.length >= 4) {
-    for (let i = 0; i < CAPITULOS_DICTAMEN.length; i++) {
-      const cap = CAPITULOS_DICTAMEN[i];
-      const match = matches[i];
-      const body = match ? match[0].trim() : `## ${cap.titulo}\n\n(Sección desarrollada)`;
-      results.push({ id: cap.id, titulo: cap.titulo, markdown: body });
-    }
-  } else {
-    // Si el formateo varió levemente, particionar proporcionalmente o asignar la respuesta completa
-    results.push({
-      id: CAPITULOS_DICTAMEN[0].id,
-      titulo: CAPITULOS_DICTAMEN[0].titulo,
-      markdown: text,
-    });
-    for (let i = 1; i < CAPITULOS_DICTAMEN.length; i++) {
-      results.push({
-        id: CAPITULOS_DICTAMEN[i].id,
-        titulo: CAPITULOS_DICTAMEN[i].titulo,
-        markdown: `*(Contenido integrado en la resolución general)*`,
-      });
-    }
-  }
-
-  return results;
+  return await invokeGemini({
+    systemInstruction: systemPrompt,
+    contents: JSON.stringify({
+      citasInvalidas: params.unverifiedCitations,
+      citasValidasYaPresentes: params.citedOkfIds,
+      nodosValidosPermitidos: params.validNodes.map((n) => ({
+        okf_id: n.okf_id,
+        title: n.title,
+        article_number: n.article_number,
+      })),
+      dictamenActual: params.dictamenMarkdown,
+    }),
+    maxOutputTokens: APP_CONFIG.gemini.maxOutputTokens,
+  });
 }
 
 export interface PipelineStepEvent {
@@ -278,6 +325,7 @@ export async function executeNeuroSymbolicPipeline(
   reporteSHACLInicial: SHACLValidationReport;
   reporteSHACLFinal: SHACLValidationReport;
   reparacionSHACLEjecutada: boolean;
+  reparacionEpistemicaEjecutada: boolean;
   seccionesRedactadas: Array<{ id: string; titulo: string; markdown: string }>;
   dictamenCompletoMarkdown: string;
   auditoriaEpistemica: EpistemicAuditResult;
@@ -425,9 +473,10 @@ export async function executeNeuroSymbolicPipeline(
     });
   }
 
-  const dictamenCompletoMarkdown = seccionesRedactadas.map((s) => s.markdown).join('\n\n---\n\n');
+  let finalSections = seccionesRedactadas;
+  let dictamenCompletoMarkdown = finalSections.map((s) => s.markdown).join('\n\n---\n\n');
 
-  // PASO 6: Auditor Epistémico Post-Generación (SHACL + OPA)
+  // PASO 6: Auditor Epistémico Post-Generación (SHACL + OPA) + Auto-Reparación (máx. 1 pase)
   emit({
     step: 6,
     stageId: 'EpistemicAuditorNode',
@@ -436,19 +485,80 @@ export async function executeNeuroSymbolicPipeline(
     detail: 'Verificando trazabilidad de citas contra legal:EpistemicAuditShape y el subgrafo Neo4j...',
   });
 
-  const auditoriaEpistemica = await auditarDictamenEpistemico(
+  let auditoriaEpistemica = await auditarDictamenEpistemico(
     dictamenCompletoMarkdown,
     finalNodes,
     directivasOPA
   );
+  let reparacionEpistemicaEjecutada = false;
+
+  if (!auditoriaEpistemica.passed) {
+    // 6A. Intento determinista (0 tokens LLM): normalizar citas exactas sin corchetes
+    const normalizedMd = wrapBareValidCitations(dictamenCompletoMarkdown, finalNodes);
+    if (normalizedMd !== dictamenCompletoMarkdown) {
+      dictamenCompletoMarkdown = normalizedMd;
+      finalSections = splitDictamenIntoSections(dictamenCompletoMarkdown);
+      auditoriaEpistemica = await auditarDictamenEpistemico(
+        dictamenCompletoMarkdown,
+        finalNodes,
+        directivasOPA
+      );
+      if (auditoriaEpistemica.passed) {
+        reparacionEpistemicaEjecutada = true;
+      }
+    }
+  }
+
+  if (!auditoriaEpistemica.passed) {
+    // 6B. Pase único dirigido de auto-reparación epistémica con Gemini
+    emit({
+      step: 6,
+      stageId: 'EpistemicAuditorNode',
+      title: '6. Auditor Epistémico Post-Generación (SHACL + OPA)',
+      status: 'running',
+      detail: 'Auto-reparación epistémica (máx. 1 pase): corrigiendo citas inválidas o faltantes...',
+    });
+
+    try {
+      const repairedMd = await repairDictamenEpistemicCitations({
+        dictamenMarkdown: dictamenCompletoMarkdown,
+        validNodes: finalNodes,
+        unverifiedCitations: auditoriaEpistemica.unverifiedCitations,
+        citedOkfIds: auditoriaEpistemica.citedOkfIds,
+      });
+
+      if (repairedMd && repairedMd.trim().length > 0) {
+        reparacionEpistemicaEjecutada = true;
+        finalSections = splitDictamenIntoSections(repairedMd);
+        dictamenCompletoMarkdown = finalSections.map((s) => s.markdown).join('\n\n---\n\n');
+        auditoriaEpistemica = await auditarDictamenEpistemico(
+          dictamenCompletoMarkdown,
+          finalNodes,
+          directivasOPA
+        );
+      }
+    } catch (repairErr: any) {
+      console.warn('[Epistemic Auto-Repair] Falló el pase de reparación:', repairErr.message);
+    }
+  }
 
   emit({
     step: 6,
     stageId: 'EpistemicAuditorNode',
     title: '6. Auditor Epistémico Post-Generación (SHACL + OPA)',
-    status: auditoriaEpistemica.passed ? 'completed' : 'failed',
-    detail: auditoriaEpistemica.auditSummary,
-    payload: auditoriaEpistemica,
+    status: !auditoriaEpistemica.passed
+      ? 'failed'
+      : reparacionEpistemicaEjecutada
+      ? 'repaired'
+      : 'completed',
+    detail: reparacionEpistemicaEjecutada && auditoriaEpistemica.passed
+      ? `Auto-reparación epistémica exitosa: ${auditoriaEpistemica.auditSummary}`
+      : auditoriaEpistemica.auditSummary,
+    payload: {
+      ...auditoriaEpistemica,
+      reparacionEpistemicaEjecutada,
+      repairedMarkdown: reparacionEpistemicaEjecutada ? dictamenCompletoMarkdown : undefined,
+    },
   });
 
   return {
@@ -460,7 +570,8 @@ export async function executeNeuroSymbolicPipeline(
     reporteSHACLInicial,
     reporteSHACLFinal,
     reparacionSHACLEjecutada,
-    seccionesRedactadas,
+    reparacionEpistemicaEjecutada,
+    seccionesRedactadas: finalSections,
     dictamenCompletoMarkdown,
     auditoriaEpistemica,
   };

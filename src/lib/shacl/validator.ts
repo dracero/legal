@@ -208,6 +208,11 @@ export async function auditarDictamenEpistemico(
   const opaComplianceVerified = unverifiedCitations.length === 0 && citedOkfIds.length > 0;
   const passed = shaclPostConditionConforms && opaComplianceVerified;
 
+  const unverifiedDetail =
+    unverifiedCitations.length > 0
+      ? ` Citas no pertenecientes al subgrafo: [${unverifiedCitations.join(', ')}].`
+      : '';
+
   return {
     passed,
     totalNodesInSubgraph: subgrafo.length,
@@ -218,7 +223,7 @@ export async function auditarDictamenEpistemico(
     shaclPostConditionConforms,
     auditSummary: passed
       ? `Auditoría Epistémica SHACL Aprobada: ${citedOkfIds.length}/${subgrafo.length} normas del documento citadas con trazabilidad verificada y 0 citas alucinadas.`
-      : `Alerta Epistémica SHACL: ${(report.results || []).map((r: any) => r.message?.[0]?.value).join(' | ') || 'Faltan citas verificadas o se detectaron citas no pertenecientes al subgrafo.'}`,
+      : `Alerta Epistémica SHACL: ${(report.results || []).map((r: any) => r.message?.[0]?.value).join(' | ') || 'Faltan citas verificadas.'}${unverifiedDetail}`,
   };
 }
 

@@ -71,6 +71,7 @@ El archivo [`.gitignore`](.gitignore) excluye `.env`, `.env.*` (excepto [`.env.e
 | `SHACL_SHAPES_PATH` | `./src/lib/shacl/shapes.ttl` | Ruta al archivo Turtle con shapes SHACL. |
 | `SHACL_ONTOLOGY_NS` | `http://antigravity.ai/ontologia/legal#` | Namespace ontológico RDF. |
 | `OKF_CONTENT_DIR` | `./src/content/okf` | Directorio donde se persisten fichas `.md`. |
+| `PROMPTS_DIR` | `./src/lib/prompts` | Directorio de *system prompts* editables (`.md`) con recarga automática. |
 
 ### Rotación Inteligente de API Keys de Gemini ([`src/lib/gemini/key-rotator.ts`](src/lib/gemini/key-rotator.ts))
 
@@ -89,7 +90,7 @@ El archivo [`.gitignore`](.gitignore) excluye `.env`, `.env.*` (excepto [`.env.e
 ## 📄 Flujo de Trabajo y Arquitectura
 
 ### 1. Ingesta Dinámica de Normas y Atomización OKF ([`src/lib/okf/pdf-ingestor.ts`](src/lib/okf/pdf-ingestor.ts))
-* Acepta archivos PDF binarios (`multipart/form-data`) y cargas JSON (`fileBase64` o texto UTF-8 directo `rawPdfText`) en [`POST /api/laws/upload`](src/pages/api/laws/upload.ts).
+* Acepta uno o varios archivos PDF binarios (`multipart/form-data` en campos `file` o `files`) y cargas JSON (`fileBase64` o texto UTF-8 directo `rawPdfText`) en [`POST /api/laws/upload`](src/pages/api/laws/upload.ts). Desde [`src/pages/index.astro`](src/pages/index.astro) admite selección múltiple (`multiple`), arrastrar y soltar (drag-and-drop) en `#pdf-dropzone` y cola acumulativa con carga secuencial para enlazar referencias cruzadas en Neo4j entre documentos del lote.
 * Segmenta el documento en artículos/cláusulas atómicas (`norma-<slug>-art-<n>`).
 * **Extracción Dinámica por Lotes con `gemini-3.6-flash`:** Procesa hasta 10 artículos (o 35.000 caracteres) por solicitud extrayendo **Entidades Ontológicas** y **Reglas Deónticas** (`OBLIGACION`, `PROHIBICION`, `PERMISION`, `SANCION_NULIDAD`), propagando cualquier error real sin generar reglas sintéticas falsas.
 * **Compuerta SHACL Pre-Ingesta ([`src/lib/shacl/shapes.ttl`](src/lib/shacl/shapes.ttl)):** Valida `legal:OKFNodeShape` (el selector de vigencia `#pdf-status` en la UI permite probar la admisión de normas `Vigente` o el rechazo HTTP `422` para `Historica`).
@@ -101,7 +102,7 @@ El archivo [`.gitignore`](.gitignore) excluye `.env`, `.env.*` (excepto [`.env.e
 3. **Recuperador Híbrido Neo4j ([`src/lib/neo4j/client.ts`](src/lib/neo4j/client.ts)):** Combina búsqueda vectorial (Hugging Face 384d), Full-Text BM25, nodos obligatorios de OPA y expansión Cypher (con respaldo controlado hacia nodos `Vigente` activos si los índices devolvieran cero candidatos).
 4. **Validador SHACL + Autorreparación:** Valida `legal:LegalAnalysisShape` en RDF/Turtle; si faltan nodos exigidos por OPA, los recupera deterministamente desde Neo4j.
 5. **Agente Exégeta (I–IV):** Redacta en un pase integral las 4 secciones del dictamen jurídico basándose estrictamente en los nodos vigentes recuperados y citándolos con `[okf_id]`. El visor en [`src/pages/index.astro`](src/pages/index.astro) renderiza el Markdown mediante `marked` e hidrata citas interactivas `[norma-...]`.
-6. **Auditor Epistémico Post-Generación ([`src/lib/shacl/validator.ts`](src/lib/shacl/validator.ts)):** Valida `legal:EpistemicAuditShape` verificando exclusivamente citas explícitas entre corchetes `[norma-...]` contra el subgrafo recuperado; si no hay citas válidas o existen citas alucinadas (`passed === false`), la etapa 6 marca estado `failed` (`Alerta ✗`) y el visor muestra la advertencia epistémica.
+6. **Auditor Epistémico Post-Generación y Auto-Reparación ([`src/lib/shacl/validator.ts`](src/lib/shacl/validator.ts)):** Valida `legal:EpistemicAuditShape` verificando exclusivamente citas explícitas entre corchetes `[norma-...]` contra el subgrafo recuperado. Si falla (`passed === false`), ejecuta primero una normalización determinista de citas válidas sin corchetes (0 tokens LLM) y, si persiste el fallo, un **único pase dirigido de auto-reparación** ([`src/lib/prompts/epistemic-repair.md`](src/lib/prompts/epistemic-repair.md)), emitiendo estado `repaired` (`Reparado ✓`) si corrige o `failed` (`Alerta ✗`) si persiste la anomalía.
 
 ---
 
@@ -141,7 +142,7 @@ En cualquier momento puedes reiniciar el sistema por completo (eliminando el 100
 
 | Método y Ruta | Archivo | Función |
 | :--- | :--- | :--- |
-| `POST /api/laws/upload` | [`src/pages/api/laws/upload.ts`](src/pages/api/laws/upload.ts) | Recibe PDF (`multipart/form-data`) o JSON (`fileBase64` / `rawPdfText`), segmenta en artículos OKF, extrae ontología/deóntica, valida SHACL (`422` si rechaza) e indexa en Neo4j. |
+| `POST /api/laws/upload` | [`src/pages/api/laws/upload.ts`](src/pages/api/laws/upload.ts) | Recibe uno o varios PDF (`multipart/form-data` en `file`/`files`) o JSON (`fileBase64` / `rawPdfText`), segmenta en artículos OKF, extrae ontología/deóntica, valida SHACL (`422` si rechaza) e indexa en Neo4j. |
 | `GET /api/laws/catalog` | [`src/pages/api/laws/catalog.ts`](src/pages/api/laws/catalog.ts) | Devuelve todos los nodos `LegalOKF` y sus relaciones en Neo4j. |
 | `DELETE /api/laws/catalog` | [`src/pages/api/laws/catalog.ts`](src/pages/api/laws/catalog.ts) | Ejecuta `MATCH (n) DETACH DELETE n`, elimina `src/content/okf/*.md` y revalida índices vacíos. |
 | `POST /api/dictamen/stream` | [`src/pages/api/dictamen/stream.ts`](src/pages/api/dictamen/stream.ts) | Ejecuta en streaming NDJSON las 6 etapas del pipeline neuro-simbólico. |
@@ -176,6 +177,13 @@ data_legal/
 │   │   ├── opa/policies/
 │   │   │   ├── legal_deontico.rego         # Matriz deóntica dinámica y contrafácticos
 │   │   │   └── legal_deontico_test.rego    # Tests unitarios Rego v1
+│   │   ├── prompts/                        # System prompts externalizados (.md) + loader hot-reload
+│   │   │   ├── loader.ts
+│   │   │   ├── fact-extractor.md
+│   │   │   ├── dictamen-exegesis.md
+│   │   │   ├── epistemic-repair.md
+│   │   │   ├── deontic-batch-extractor.md
+│   │   │   └── deontic-article-extractor.md
 │   │   └── shacl/
 │   │       ├── shapes.ttl                  # Restricciones SHACL (pre-ingesta, subgrafo, auditoría)
 │   │       └── validator.ts                # Validador RDF/SHACL y auditor epistémico

@@ -3,6 +3,7 @@ import Layout from '../layouts/Layout.astro';
 import { getAllCatalogOKFNodes } from '../lib/neo4j/client';
 import { CONFIGURED_GEMINI_MODEL } from '../lib/gemini/agent';
 import { APP_CONFIG } from '../lib/config';
+import { getOpaRuntimeLabel } from '../lib/opa/evaluator';
 
 let initialCatalog = { nodes: [], edges: [] };
 try {
@@ -10,6 +11,7 @@ try {
 } catch (e) {
   console.warn('[Index SSR] Neo4j catalog aún inicializando:', e);
 }
+const opaLabel = await getOpaRuntimeLabel();
 ---
 
 <Layout title="Sistema Neuro-Simbólico de Análisis Legal y Razonamiento Deóntico | OKF + Neo4j + OPA + SHACL + Gemini 3.6 Flash">
@@ -58,7 +60,7 @@ try {
         </button>
         <span class="flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-amber-300">
           <span class="h-2 w-2 rounded-full bg-amber-400"></span>
-          OPA Rego v1.22
+          {opaLabel}
         </span>
         <span class="flex items-center gap-1.5 rounded-lg border border-purple-500/30 bg-purple-500/10 px-2.5 py-1 text-purple-300">
           <span class="h-2 w-2 rounded-full bg-purple-400"></span>
@@ -113,24 +115,26 @@ try {
       </div>
 
       <form id="pdf-upload-form" class="grid grid-cols-1 gap-4 lg:grid-cols-12">
-        <!-- Selector de archivo PDF -->
+        <!-- Selector múltiple de archivos PDF -->
         <div class="lg:col-span-4">
           <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
-            Archivo PDF de la Norma o Contrato
+            Archivos PDF de Normas o Contratos (uno o varios)
           </label>
           <label
+            id="pdf-dropzone"
             for="pdf-file-input"
-            class="flex h-28 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-700 bg-slate-900/70 px-4 text-center transition hover:border-sky-500/60 hover:bg-slate-900"
+            class="flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-700 bg-slate-900/70 px-4 py-3 text-center transition hover:border-sky-500/60 hover:bg-slate-900"
           >
             <svg class="mb-1.5 h-7 w-7 text-sky-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
             <span id="pdf-file-label" class="text-xs font-medium text-slate-200">
-              Seleccionar o arrastrar PDF (.pdf)
+              Seleccionar o arrastrar uno o varios PDF (.pdf)
             </span>
-            <span class="mt-0.5 text-[11px] text-slate-400">Extracción automática de artículos, ontología y deóntica</span>
-            <input id="pdf-file-input" name="file" type="file" accept=".pdf,application/pdf" class="hidden" />
+            <span class="mt-0.5 text-[11px] text-slate-400">Puedes elegir múltiples archivos a la vez o ir sumándolos</span>
+            <input id="pdf-file-input" name="file" type="file" accept=".pdf,application/pdf" multiple class="hidden" />
           </label>
+          <div id="pdf-selected-list" class="mt-2 hidden flex-wrap gap-1.5"></div>
         </div>
 
         <!-- Metadatos de la Norma -->
@@ -141,8 +145,7 @@ try {
               id="pdf-law-number"
               name="lawNumber"
               type="text"
-              placeholder="Ej: Ley 24.240 de Defensa del Consumidor"
-              required
+              placeholder="Automático según nombre del archivo"
               class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-white focus:border-sky-500 focus:outline-none"
             />
           </div>
@@ -442,7 +445,14 @@ try {
     </div>
   </main>
 
-  <script define:vars={{ initialCatalog }}>
+  <script id="initial-catalog-json" type="application/json" set:html={JSON.stringify(initialCatalog)}></script>
+
+  <script>
+    import { marked } from 'marked';
+
+    const initialCatalogEl = document.getElementById('initial-catalog-json');
+    const initialCatalog = initialCatalogEl ? JSON.parse(initialCatalogEl.textContent || '{}') : { nodes: [], edges: [] };
+
     // Estado global en el cliente y snapshots de plantillas en blanco
     let currentGraphNodes = initialCatalog.nodes || [];
     let currentGraphEdges = initialCatalog.edges || [];
@@ -680,20 +690,99 @@ try {
       btn.addEventListener('click', () => activateSideTab(btn.getAttribute('data-tab')));
     });
 
-    // 3. Subida e Ingesta de Documentos PDF
+    // 3. Subida e Ingesta de uno o múltiples Documentos PDF (con drag-and-drop y cola acumulada)
     const pdfInput = document.getElementById('pdf-file-input');
+    const pdfDropzone = document.getElementById('pdf-dropzone');
     const pdfLabel = document.getElementById('pdf-file-label');
+    const pdfSelectedList = document.getElementById('pdf-selected-list');
+    const pdfLawInput = document.getElementById('pdf-law-number');
     const pdfForm = document.getElementById('pdf-upload-form');
     const pdfResultBox = document.getElementById('pdf-upload-result');
 
-    pdfInput?.addEventListener('change', () => {
-      if (pdfInput.files && pdfInput.files[0]) {
-        pdfLabel.textContent = `Archivo seleccionado: ${pdfInput.files[0].name}`;
-        const lawInput = document.getElementById('pdf-law-number');
-        if (lawInput && !lawInput.value) {
-          lawInput.value = pdfInput.files[0].name.replace(/\.pdf$/i, '');
+    let selectedPdfFiles = [];
+
+    function syncSelectedPdfUI() {
+      if (!pdfLabel || !pdfSelectedList) return;
+
+      if (selectedPdfFiles.length === 0) {
+        pdfLabel.textContent = 'Seleccionar o arrastrar uno o varios PDF (.pdf)';
+        pdfSelectedList.innerHTML = '';
+        pdfSelectedList.classList.add('hidden');
+        pdfSelectedList.classList.remove('flex');
+        if (pdfLawInput) {
+          pdfLawInput.disabled = false;
+          pdfLawInput.placeholder = 'Automático según nombre del archivo';
+          pdfLawInput.value = '';
+        }
+        return;
+      }
+
+      if (selectedPdfFiles.length === 1) {
+        pdfLabel.textContent = `1 PDF listo: ${selectedPdfFiles[0].name} (haz clic o arrastra para sumar más)`;
+        if (pdfLawInput) {
+          pdfLawInput.disabled = false;
+          pdfLawInput.placeholder = 'Título de la norma';
+          pdfLawInput.value = selectedPdfFiles[0].name.replace(/\.pdf$/i, '');
+        }
+      } else {
+        pdfLabel.textContent = `${selectedPdfFiles.length} documentos PDF seleccionados (puedes seguir sumando)`;
+        if (pdfLawInput) {
+          pdfLawInput.value = '';
+          pdfLawInput.placeholder = `Automático por archivo (${selectedPdfFiles.length} PDFs)`;
+          pdfLawInput.disabled = true;
         }
       }
+
+      pdfSelectedList.classList.remove('hidden');
+      pdfSelectedList.classList.add('flex');
+      pdfSelectedList.innerHTML = selectedPdfFiles
+        .map(
+          (f, idx) => `
+          <span class="inline-flex items-center gap-1 rounded-md border border-sky-500/35 bg-sky-500/15 px-2 py-0.5 text-[11px] text-sky-200">
+            <span class="max-w-[180px] truncate">${f.name}</span>
+            <button type="button" data-remove-pdf="${idx}" class="text-slate-400 hover:text-rose-300 cursor-pointer" title="Quitar archivo">✕</button>
+          </span>`
+        )
+        .join('');
+
+      pdfSelectedList.querySelectorAll('[data-remove-pdf]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const idx = Number(btn.getAttribute('data-remove-pdf'));
+          selectedPdfFiles.splice(idx, 1);
+          syncSelectedPdfUI();
+        });
+      });
+    }
+
+    function addPdfFiles(fileList) {
+      const incoming = Array.from(fileList || []).filter(
+        (f) => f && f.size > 0 && (/\.pdf$/i.test(f.name) || f.type === 'application/pdf')
+      );
+      for (const file of incoming) {
+        const duplicate = selectedPdfFiles.some((e) => e.name === file.name && e.size === file.size);
+        if (!duplicate) selectedPdfFiles.push(file);
+      }
+      if (pdfInput) pdfInput.value = '';
+      syncSelectedPdfUI();
+    }
+
+    pdfInput?.addEventListener('change', () => {
+      addPdfFiles(pdfInput.files);
+    });
+
+    pdfDropzone?.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      pdfDropzone.classList.add('border-sky-400', 'bg-slate-800/80');
+    });
+
+    pdfDropzone?.addEventListener('dragleave', () => {
+      pdfDropzone.classList.remove('border-sky-400', 'bg-slate-800/80');
+    });
+
+    pdfDropzone?.addEventListener('drop', (e) => {
+      e.preventDefault();
+      pdfDropzone.classList.remove('border-sky-400', 'bg-slate-800/80');
+      addPdfFiles(e.dataTransfer?.files);
     });
 
     async function refreshCatalogGraph() {
@@ -715,46 +804,63 @@ try {
       }
     }
 
-    function renderPdfIngestionFeedback(result) {
+    function renderBatchIngestionFeedback(results) {
       pdfResultBox.classList.remove('hidden');
-      if (result.success) {
-        pdfResultBox.className = 'mt-3 rounded-xl border border-emerald-500/40 bg-emerald-950/30 p-3.5 text-xs text-emerald-200';
-        const ids = (result.nodesIngested || []).map((n) => n.okf_id).join(', ');
-        pdfResultBox.innerHTML = `
-          <div class="flex items-center justify-between font-bold text-emerald-300">
-            <span>✓ Ingesta Atómica OKF y Extracción Deóntica Exitosa (${result.fileName})</span>
-            <span>${result.nodesIngested.length} Artículos en Neo4j</span>
-          </div>
-          <p class="mt-1 text-emerald-100/90">
-            Se extrajeron <strong>${result.extractedCharacters}</strong> caracteres y se estructuraron <strong>${result.atomicArticlesCreated}</strong> artículos atómicos con su ontología y lógica deóntica (<code>sh:conforms = true</code>).
-          </p>
-          <p class="mt-1 font-mono text-[11px] text-sky-300">Nodos OKF indexados: ${ids}</p>
-        `;
-      } else {
-        const firstViolation =
-          result.shaclReports?.[0]?.report?.violations?.[0]?.message ||
-          result.error ||
-          'El documento no superó las restricciones ontológicas SHACL.';
-        pdfResultBox.className = 'mt-3 rounded-xl border border-rose-500/40 bg-rose-950/30 p-3.5 text-xs text-rose-200';
-        pdfResultBox.innerHTML = `
-          <div class="font-bold text-rose-300">
-            ✗ Compuerta SHACL Pre-Ingesta Rechazó el Documento (${result.fileName || 'PDF'})
-          </div>
-          <p class="mt-1">Motivo determinista (<code>legal:OKFNodeShape</code>): <strong>${firstViolation}</strong></p>
-        `;
-      }
+      const okCount = results.filter((r) => r.success).length;
+      const failCount = results.length - okCount;
+      const totalArticles = results.reduce((acc, r) => acc + (r.nodesIngested?.length || 0), 0);
+
+      pdfResultBox.className =
+        failCount === 0
+          ? 'mt-3 rounded-xl border border-emerald-500/40 bg-emerald-950/30 p-3.5 text-xs text-emerald-200'
+          : okCount > 0
+          ? 'mt-3 rounded-xl border border-amber-500/40 bg-amber-950/30 p-3.5 text-xs text-amber-200'
+          : 'mt-3 rounded-xl border border-rose-500/40 bg-rose-950/30 p-3.5 text-xs text-rose-200';
+
+      const itemsHtml = results
+        .map((r) => {
+          if (r.success) {
+            const ids = (r.nodesIngested || []).map((n) => n.okf_id).join(', ');
+            return `
+              <div class="mt-2 rounded-lg border border-emerald-500/30 bg-slate-950/60 p-2.5">
+                <div class="flex items-center justify-between font-bold text-emerald-300">
+                  <span>✓ ${r.fileName}</span>
+                  <span>${r.nodesIngested.length} artículos OKF</span>
+                </div>
+                <p class="mt-0.5 text-[11px] text-slate-300">${r.extractedCharacters} caracteres • <code>sh:conforms = true</code></p>
+                <p class="mt-0.5 font-mono text-[10px] text-sky-300 break-all">${ids}</p>
+              </div>`;
+          }
+          const firstViolation =
+            r.shaclReports?.[0]?.report?.violations?.[0]?.message ||
+            r.error ||
+            'El documento no superó las restricciones SHACL.';
+          return `
+            <div class="mt-2 rounded-lg border border-rose-500/35 bg-slate-950/60 p-2.5">
+              <div class="font-bold text-rose-300">✗ ${r.fileName}</div>
+              <p class="mt-0.5 text-[11px] text-rose-200">${firstViolation}</p>
+            </div>`;
+        })
+        .join('');
+
+      pdfResultBox.innerHTML = `
+        <div class="flex items-center justify-between font-bold">
+          <span>Resultado de Ingesta: ${okCount}/${results.length} documentos indexados</span>
+          <span>${totalArticles} nodos agregados a Neo4j</span>
+        </div>
+        ${itemsHtml}
+      `;
     }
 
     pdfForm?.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const file = pdfInput?.files?.[0];
 
-      if (!file) {
+      if (selectedPdfFiles.length === 0) {
         pdfResultBox.classList.remove('hidden');
         pdfResultBox.className = 'mt-3 rounded-xl border border-amber-500/40 bg-amber-950/30 p-3.5 text-xs text-amber-200';
         pdfResultBox.innerHTML = `
-          <div class="font-bold text-amber-300">Seleccione un archivo PDF</div>
-          <p class="mt-1">Debe seleccionar un archivo PDF legal de su disco para que el sistema procese su ingesta atómica y extraiga su matriz deóntica.</p>
+          <div class="font-bold text-amber-300">Seleccione uno o más archivos PDF</div>
+          <p class="mt-1">Seleccione o arrastre uno o varios archivos PDF para extraer sus artículos atómicos, ontología y reglas deónticas en Neo4j.</p>
         `;
         return;
       }
@@ -762,25 +868,52 @@ try {
       const btnSubmitPdf = document.getElementById('btn-submit-pdf');
       btnSubmitPdf.disabled = true;
       btnSubmitPdf.classList.add('opacity-60');
-      pdfResultBox.classList.remove('hidden');
-      pdfResultBox.className = 'mt-3 rounded-xl border border-sky-500/40 bg-sky-950/30 p-3.5 text-xs text-sky-200 animate-pulse';
-      pdfResultBox.innerHTML = `
-        <div class="font-bold text-sky-300">Procesando documento normativo con Gemini 3.6 Flash...</div>
-        <p class="mt-1">Segmentando artículos atómicos, extrayendo ontología y lógica deóntica, calculando embeddings locales e indexando en Neo4j...</p>
-      `;
+
+      const jurisdiction = document.getElementById('pdf-jurisdiction')?.value || 'General';
+      const status = document.getElementById('pdf-status')?.value || 'Vigente';
+      const singleCustomLaw = selectedPdfFiles.length === 1 ? (pdfLawInput?.value || '').trim() : '';
+
+      const results = [];
 
       try {
-        const formData = new FormData(pdfForm);
-        const res = await fetch('/api/laws/upload', {
-          method: 'POST',
-          body: formData,
-        });
-        const data = await res.json();
-        renderPdfIngestionFeedback(data);
-        if (data.success) await refreshCatalogGraph();
-      } catch (err) {
-        pdfResultBox.className = 'mt-3 rounded-xl border border-rose-500/40 bg-rose-950/30 p-3.5 text-xs text-rose-200';
-        pdfResultBox.innerHTML = `<div class="font-bold text-rose-300">Error al procesar: ${err.message}</div>`;
+        for (let i = 0; i < selectedPdfFiles.length; i++) {
+          const file = selectedPdfFiles[i];
+          const lawNumber = singleCustomLaw || file.name.replace(/\.pdf$/i, '').trim() || 'Documento Normativo';
+
+          pdfResultBox.classList.remove('hidden');
+          pdfResultBox.className = 'mt-3 rounded-xl border border-sky-500/40 bg-sky-950/30 p-3.5 text-xs text-sky-200 animate-pulse';
+          pdfResultBox.innerHTML = `
+            <div class="font-bold text-sky-300">Procesando documento ${i + 1}/${selectedPdfFiles.length}: ${file.name}</div>
+            <p class="mt-1">Segmentando artículos atómicos, extrayendo ontología y lógica deóntica con Gemini 3.6 Flash e indexando en Neo4j...</p>
+          `;
+
+          const fd = new FormData();
+          fd.append('file', file);
+          fd.append('lawNumber', lawNumber);
+          fd.append('jurisdiction', jurisdiction);
+          fd.append('status', status);
+
+          try {
+            const res = await fetch('/api/laws/upload', { method: 'POST', body: fd });
+            const data = await res.json();
+            results.push({ ...data, fileName: data.fileName || file.name });
+            if (data.success) {
+              await refreshCatalogGraph();
+            }
+          } catch (fileErr) {
+            results.push({
+              success: false,
+              fileName: file.name,
+              error: fileErr.message || 'Error de red o procesamiento',
+            });
+          }
+        }
+
+        renderBatchIngestionFeedback(results);
+        if (results.some((r) => r.success)) {
+          selectedPdfFiles = [];
+          syncSelectedPdfUI();
+        }
       } finally {
         btnSubmitPdf.disabled = false;
         btnSubmitPdf.classList.remove('opacity-60');
@@ -795,6 +928,7 @@ try {
       currentGraphNodes = [];
       currentGraphEdges = [];
       selectedNodeId = null;
+      selectedPdfFiles = [];
 
       const headerCount = document.getElementById('header-node-count');
       if (headerCount) headerCount.textContent = '0';
@@ -803,7 +937,7 @@ try {
       if (emptyBanner) emptyBanner.classList.remove('hidden');
 
       pdfForm?.reset();
-      if (pdfLabel) pdfLabel.textContent = 'Seleccionar o arrastrar PDF (.pdf)';
+      syncSelectedPdfUI();
       if (pdfResultBox) {
         pdfResultBox.innerHTML = '';
         pdfResultBox.classList.add('hidden');
@@ -879,57 +1013,12 @@ try {
       btn.addEventListener('click', handleClearDatabase);
     });
 
-    // 4. Formateo de Markdown con Citas Interactivas [okf_id]
+    // 4. Formateo de Markdown con `marked` y Citas Interactivas [okf_id]
     function formatDictamenMarkdownToHtml(markdownText) {
-      let html = markdownText
-        .replace(/^#### (.*$)/gim, '<h4>$1</h4>')
-        .replace(/^### (.*$)/gim, '<h3>$1</h3>')
-        .replace(/^## (.*$)/gim, '<h2>$1</h2>')
-        .replace(/^---$/gim, '<hr />')
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.*?)\*/g, '<em>$1</em>')
-        .replace(/`([^`]+)`/g, '<code>$1</code>');
-
-      // Tablas Markdown
-      html = html.replace(/((?:\|.*\|\n)+)/g, (tableBlock) => {
-        const rows = tableBlock.trim().split('\n');
-        if (rows.length < 2) return tableBlock;
-        let tableHtml = '<table>';
-        rows.forEach((row, rIdx) => {
-          if (row.includes('---')) return;
-          const cells = row.split('|').slice(1, -1).map((c) => c.trim());
-          const tag = rIdx === 0 ? 'th' : 'td';
-          tableHtml += '<tr>' + cells.map((c) => `<${tag}>${c}</${tag}>`).join('') + '</tr>';
-        });
-        tableHtml += '</table>';
-        return tableHtml;
-      });
-
-      // Píldoras de citas interactivas [norma-...]
-      html = html.replace(/\[(norma-[a-z0-9-]+)\]/gi, (_, okfId) => {
+      const renderedHtml = String(marked.parse(markdownText || '', { gfm: true, breaks: false }));
+      return renderedHtml.replace(/\[(norma-[a-z0-9_-]+)\]/gi, (_, okfId) => {
         return `<button type="button" data-cite-okf="${okfId}" class="cite-okf-pill inline-flex items-center gap-1 rounded-md border border-sky-500/40 bg-sky-500/15 px-1.5 py-0.5 font-mono text-xs font-semibold text-sky-300 hover:bg-sky-500/30 cursor-pointer">🔗 ${okfId}</button>`;
       });
-
-      // Párrafos y listas
-      const blocks = html.split('\n\n');
-      return blocks
-        .map((b) => {
-          const t = b.trim();
-          if (!t) return '';
-          if (t.startsWith('<h') || t.startsWith('<table') || t.startsWith('<hr')) return t;
-          if (t.startsWith('>')) {
-            return `<blockquote>${t.replace(/^>\s?/gm, '').replace(/\n/g, '<br/>')}</blockquote>`;
-          }
-          if (t.startsWith('- ') || t.startsWith('1. ')) {
-            const items = t
-              .split('\n')
-              .map((line) => `<li>${line.replace(/^(-|\d+\.)\s+/, '')}</li>`)
-              .join('');
-            return `<ul>${items}</ul>`;
-          }
-          return `<p>${t.replace(/\n/g, '<br/>')}</p>`;
-        })
-        .join('\n');
     }
 
     function bindCitationPills() {
@@ -1047,9 +1136,18 @@ try {
         ${
           auditoria
             ? `
-        <div class="rounded-xl border border-sky-500/30 bg-sky-950/20 p-3.5">
-          <div class="font-bold text-sky-300">
-            Certificado de Auditoría Epistémica Post-Generación (legal:EpistemicAuditShape)
+        <div class="rounded-xl border ${
+          auditoria.passed ? 'border-sky-500/30 bg-sky-950/20' : 'border-rose-500/40 bg-rose-950/25'
+        } p-3.5">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <span class="font-bold ${auditoria.passed ? 'text-sky-300' : 'text-rose-300'}">
+              Certificado de Auditoría Epistémica Post-Generación (legal:EpistemicAuditShape)
+            </span>
+            ${
+              auditoria.reparacionEpistemicaEjecutada
+                ? '<span class="rounded bg-purple-500/20 px-2 py-0.5 font-mono text-[10px] text-purple-200">Auto-reparado en Etapa 6</span>'
+                : ''
+            }
           </div>
           <p class="mt-1 text-[11px] text-slate-200">${auditoria.auditSummary}</p>
           <div class="mt-2 flex flex-wrap gap-1">
@@ -1060,6 +1158,23 @@ try {
               )
               .join('')}
           </div>
+          ${
+            (auditoria.unverifiedCitations || []).length > 0
+              ? `
+          <div class="mt-2 border-t border-rose-500/30 pt-2">
+            <div class="text-[10px] font-semibold text-rose-300 mb-1">Citas detectadas fuera del subgrafo:</div>
+            <div class="flex flex-wrap gap-1">
+              ${auditoria.unverifiedCitations
+                .map(
+                  (badId) =>
+                    `<span class="rounded bg-rose-500/25 border border-rose-500/40 px-1.5 py-0.5 font-mono text-[10px] text-rose-200">[${badId}]</span>`
+                )
+                .join('')}
+            </div>
+          </div>
+          `
+              : ''
+          }
         </div>
         `
             : ''
@@ -1100,6 +1215,12 @@ try {
           badge.className = 'step-badge rounded bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-bold text-emerald-300';
           badge.textContent = status === 'repaired' ? 'Reparado ✓' : 'Completado ✓';
         }
+      } else if (status === 'failed') {
+        card.className = 'rounded-xl border border-rose-500/50 bg-rose-950/30 p-3 transition';
+        if (badge) {
+          badge.className = 'step-badge rounded bg-rose-500/20 px-1.5 py-0.5 text-[10px] font-bold text-rose-300';
+          badge.textContent = 'Alerta ✗';
+        }
       }
     }
 
@@ -1121,6 +1242,8 @@ try {
       let accumulatedSections = [];
       let latestHechos = null;
       let latestOPA = null;
+      let latestSHACLFinal = null;
+      let latestReparacionSHACL = false;
 
       // Resetear tarjetas de etapas
       for (let s = 1; s <= 6; s++) {
@@ -1181,8 +1304,10 @@ try {
 
               if (ev.step === 4 && (ev.status === 'completed' || ev.status === 'repaired') && ev.payload) {
                 currentGraphNodes = ev.payload.nodes || currentGraphNodes;
+                latestSHACLFinal = ev.payload.reporteSHACLFinal;
+                latestReparacionSHACL = Boolean(ev.payload.reparacionSHACLEjecutada);
                 renderNeo4jGraph(currentGraphNodes, currentGraphEdges);
-                renderSHACLAndAuditPanel(ev.payload.reporteSHACLFinal, ev.payload.reparacionSHACLEjecutada, null);
+                renderSHACLAndAuditPanel(latestSHACLFinal, latestReparacionSHACL, null);
               }
 
               if (ev.step === 5 && ev.status === 'completed' && ev.payload?.chapterCompleted) {
@@ -1194,10 +1319,16 @@ try {
                 charCounter.textContent = `${words} palabras (${fullMd.length} chars)`;
               }
 
-              if (ev.step === 6 && ev.status === 'completed' && ev.payload) {
+              if (ev.step === 6 && (ev.status === 'completed' || ev.status === 'repaired' || ev.status === 'failed') && ev.payload) {
+                if (ev.payload.repairedMarkdown) {
+                  viewer.innerHTML = formatDictamenMarkdownToHtml(ev.payload.repairedMarkdown);
+                  bindCitationPills();
+                  const words = ev.payload.repairedMarkdown.trim().split(/\s+/).length;
+                  charCounter.textContent = `${words} palabras (${ev.payload.repairedMarkdown.length} chars)`;
+                }
                 renderSHACLAndAuditPanel(
-                  { conforms: true, rdfTurtlePreview: document.querySelector('#shacl-report-container pre')?.textContent || '' },
-                  false,
+                  latestSHACLFinal || { conforms: false, rdfTurtlePreview: '' },
+                  latestReparacionSHACL,
                   ev.payload
                 );
               }
@@ -1213,9 +1344,14 @@ try {
               renderSHACLAndAuditPanel(
                 finalData.reporteSHACLFinal,
                 finalData.reparacionSHACLEjecutada,
-                finalData.auditoriaEpistemica
+                {
+                  ...finalData.auditoriaEpistemica,
+                  reparacionEpistemicaEjecutada: finalData.reparacionEpistemicaEjecutada,
+                }
               );
-              statusBadge.textContent = '✓ Dictamen completado y auditado con trazabilidad SHACL + OPA.';
+              statusBadge.textContent = finalData.auditoriaEpistemica?.passed
+                ? '✓ Dictamen completado y auditado con trazabilidad SHACL + OPA.'
+                : `⚠ Dictamen generado con alertas epistémicas: ${finalData.auditoriaEpistemica?.auditSummary || 'revisar citas'}`;
             }
           }
         }
