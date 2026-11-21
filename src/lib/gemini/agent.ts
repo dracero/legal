@@ -363,15 +363,43 @@ export async function executeNeuroSymbolicPipeline(
   });
 
   // PASO 2: Motor Deóntico de Políticas (OPA / Rego)
+  // En catálogos extensos (> 60 artículos, ej. códigos completos), pre-filtramos por recuperación
+  // híbrida Neo4j (0 tokens LLM) para evitar falsos positivos masivos y desbordes de buffer en OPA.
+  const OPA_DIRECT_CATALOG_LIMIT = 60;
+  let opaCandidateNodes = catalogNodes;
+  if (catalogNodes.length > OPA_DIRECT_CATALOG_LIMIT) {
+    const preFilterQuery = [
+      casoPlanteado,
+      hechos.parte_evaluada,
+      hechos.rol_o_condicion_juridica,
+      ...hechos.conductas_relevantes,
+      ...hechos.omisiones_atribuidas,
+      ...hechos.clausulas_o_defensas_invocadas,
+    ]
+      .filter(Boolean)
+      .join(' ');
+    const preFiltered = await hybridRetrieveAndExpandSubgraph({
+      queryText: preFilterQuery,
+      obligatoriosOPA: [],
+      limit: 15,
+    });
+    if (preFiltered.nodes.length > 0) {
+      opaCandidateNodes = preFiltered.nodes;
+    }
+  }
+
   emit({
     step: 2,
     stageId: 'OPAPolicyGate',
     title: '2. Motor Deóntico de Políticas (OPA / Rego v1)',
     status: 'running',
-    detail: 'Evaluando matriz deóntica (obligaciones, prohibiciones, nulidades y Kelsen) en OPA sobre la norma cargada...',
+    detail:
+      catalogNodes.length > OPA_DIRECT_CATALOG_LIMIT
+        ? `Evaluando matriz deóntica en OPA sobre ${opaCandidateNodes.length} artículos candidatos relevantes (de ${catalogNodes.length} cargados)...`
+        : 'Evaluando matriz deóntica (obligaciones, prohibiciones, nulidades y Kelsen) en OPA sobre la norma cargada...',
   });
 
-  const directivasOPA = await evaluarEnServidorOPA(hechos, catalogNodes);
+  const directivasOPA = await evaluarEnServidorOPA(hechos, opaCandidateNodes);
 
   emit({
     step: 2,

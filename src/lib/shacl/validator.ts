@@ -12,9 +12,19 @@ async function parseTurtleToDataset(turtleString: string) {
   return factory.dataset(quads);
 }
 
-async function loadShapesDataset() {
-  const ttl = await fs.readFile(APP_CONFIG.shacl.shapesPath, 'utf-8');
-  return parseTurtleToDataset(ttl);
+let cachedValidator: { path: string; mtimeMs: number; validator: SHACLValidator } | null = null;
+
+async function getShapesValidator(): Promise<SHACLValidator> {
+  const shapesPath = APP_CONFIG.shacl.shapesPath;
+  const stat = await fs.stat(shapesPath);
+  if (cachedValidator && cachedValidator.path === shapesPath && cachedValidator.mtimeMs === stat.mtimeMs) {
+    return cachedValidator.validator;
+  }
+  const ttl = await fs.readFile(shapesPath, 'utf-8');
+  const shapesDataset = await parseTurtleToDataset(ttl);
+  const validator = new SHACLValidator(shapesDataset);
+  cachedValidator = { path: shapesPath, mtimeMs: stat.mtimeMs, validator };
+  return validator;
 }
 
 export interface SHACLValidationReport {
@@ -52,9 +62,8 @@ export async function validateOKFEntryWithSHACL(node: Partial<OKFNode>): Promise
   lines[lines.length - 1] = lines[lines.length - 1].replace(/;$/, '.');
   const dataTurtle = lines.join('\n');
 
-  const shapesDataset = await loadShapesDataset();
+  const validator = await getShapesValidator();
   const dataDataset = await parseTurtleToDataset(dataTurtle);
-  const validator = new SHACLValidator(shapesDataset);
   const report = await validator.validate(dataDataset);
 
   const violations = (report.results || []).map((r: any) => ({
@@ -108,9 +117,8 @@ export async function validarGrafoConSHACL(
   lines[lines.length - 1] = lines[lines.length - 1].replace(/;$/, '.');
   const dataTurtle = lines.join('\n');
 
-  const shapesDataset = await loadShapesDataset();
+  const validator = await getShapesValidator();
   const dataDataset = await parseTurtleToDataset(dataTurtle);
-  const validator = new SHACLValidator(shapesDataset);
   const report = await validator.validate(dataDataset);
 
   const missingShapeRoles: string[] = [];
@@ -199,9 +207,8 @@ export async function auditarDictamenEpistemico(
   lines[lines.length - 1] = lines[lines.length - 1].replace(/;$/, '.');
   const auditTurtle = lines.join('\n');
 
-  const shapesDataset = await loadShapesDataset();
+  const validator = await getShapesValidator();
   const dataDataset = await parseTurtleToDataset(auditTurtle);
-  const validator = new SHACLValidator(shapesDataset);
   const report = await validator.validate(dataDataset);
 
   const shaclPostConditionConforms = Boolean(report.conforms);

@@ -3,11 +3,13 @@ import fs from 'fs/promises';
 import path from 'path';
 import matter from 'gray-matter';
 import { APP_CONFIG } from '../config.ts';
-import { computeHuggingFaceEmbedding } from '../embeddings/huggingface.ts';
+import { computeHuggingFaceEmbedding, computeHuggingFaceEmbeddingsBatch } from '../embeddings/huggingface.ts';
 import {
   applyNeo4jSchemaAndIndexes,
   upsertOKFNodeInSession,
+  upsertOKFNodesBatchInSession,
   linkOKFRelationsInSession,
+  linkOKFRelationsBatchInSession,
 } from './schema.js';
 
 export interface OKFRelation {
@@ -98,11 +100,55 @@ export async function upsertOKFNodeToNeo4j(node: OKFNode): Promise<void> {
   }
 }
 
-export async function linkOKFRelationsInNeo4j(nodes: OKFNode[]): Promise<void> {
+/**
+ * Persiste un bloque de nodos OKF (sin enlazar aristas salientes aún) mediante UNWIND
+ * y embeddings locales en batch. Ideal para ingesta incremental solapada por lote.
+ */
+export async function upsertOKFNodesChunkToNeo4j(nodes: OKFNode[]): Promise<void> {
+  if (nodes.length === 0) return;
+  const texts = nodes.map(
+    (node) => `${node.title} ${node.law_number} ${node.category} ${node.content}`
+  );
+  const embeddings = await computeHuggingFaceEmbeddingsBatch(texts);
+  const payload = nodes.map((node, i) => ({ node, embedding: embeddings[i] }));
+
   const driver = getNeo4jDriver();
   const session = driver.session();
   try {
-    await linkOKFRelationsInSession(session, nodes);
+    await upsertOKFNodesBatchInSession(session, payload);
+  } finally {
+    await session.close();
+  }
+}
+
+/**
+ * Persiste un lote completo de nodos OKF y sus relaciones mediante UNWIND
+ * reutilizando una única sesión de Neo4j y calculando embeddings en batch.
+ */
+export async function upsertOKFNodesBatchToNeo4j(nodes: OKFNode[]): Promise<void> {
+  if (nodes.length === 0) return;
+  const texts = nodes.map(
+    (node) => `${node.title} ${node.law_number} ${node.category} ${node.content}`
+  );
+  const embeddings = await computeHuggingFaceEmbeddingsBatch(texts);
+  const payload = nodes.map((node, i) => ({ node, embedding: embeddings[i] }));
+
+  const driver = getNeo4jDriver();
+  const session = driver.session();
+  try {
+    await upsertOKFNodesBatchInSession(session, payload);
+    await linkOKFRelationsBatchInSession(session, nodes);
+  } finally {
+    await session.close();
+  }
+}
+
+export async function linkOKFRelationsInNeo4j(nodes: OKFNode[]): Promise<void> {
+  if (nodes.length === 0) return;
+  const driver = getNeo4jDriver();
+  const session = driver.session();
+  try {
+    await linkOKFRelationsBatchInSession(session, nodes);
   } finally {
     await session.close();
   }
@@ -157,10 +203,9 @@ export async function ensureNeo4jSeeded(): Promise<{ count: number }> {
     }
 
     const localNodes = await readLocalOKFFiles();
-    for (const node of localNodes) {
-      await upsertOKFNodeToNeo4j(node);
+    if (localNodes.length > 0) {
+      await upsertOKFNodesBatchToNeo4j(localNodes);
     }
-    await linkOKFRelationsInNeo4j(localNodes);
     return { count: localNodes.length };
   } finally {
     await session.close();
@@ -387,6 +432,7 @@ export async function hybridRetrieveAndExpandSubgraph(options: {
         WHERE seed.okf_id IN $seedIds
           AND neighbor.status = 'Vigente'
         RETURN seed.okf_id AS source, type(r) AS relType, neighbor
+        LIMIT 30
         `,
         { seedIds }
       );

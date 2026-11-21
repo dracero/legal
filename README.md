@@ -91,10 +91,10 @@ El archivo [`.gitignore`](.gitignore) excluye `.env`, `.env.*` (excepto [`.env.e
 
 ### 1. Ingesta Dinámica de Normas y Atomización OKF ([`src/lib/okf/pdf-ingestor.ts`](src/lib/okf/pdf-ingestor.ts))
 * Acepta uno o varios archivos PDF binarios (`multipart/form-data` en campos `file` o `files`) y cargas JSON (`fileBase64` o texto UTF-8 directo `rawPdfText`) en [`POST /api/laws/upload`](src/pages/api/laws/upload.ts). Desde [`src/pages/index.astro`](src/pages/index.astro) admite selección múltiple (`multiple`), arrastrar y soltar (drag-and-drop) en `#pdf-dropzone` y cola acumulativa con carga secuencial para enlazar referencias cruzadas en Neo4j entre documentos del lote.
-* Segmenta el documento en artículos/cláusulas atómicas (`norma-<slug>-art-<n>`).
-* **Extracción Dinámica por Lotes con `gemini-3.6-flash`:** Procesa hasta 10 artículos (o 35.000 caracteres) por solicitud extrayendo **Entidades Ontológicas** y **Reglas Deónticas** (`OBLIGACION`, `PROHIBICION`, `PERMISION`, `SANCION_NULIDAD`), propagando cualquier error real sin generar reglas sintéticas falsas.
-* **Compuerta SHACL Pre-Ingesta ([`src/lib/shacl/shapes.ttl`](src/lib/shacl/shapes.ttl)):** Valida `legal:OKFNodeShape` (el selector de vigencia `#pdf-status` en la UI permite probar la admisión de normas `Vigente` o el rechazo HTTP `422` para `Historica`).
-* **Persistencia Neo4j Sin Colisiones ([`src/lib/neo4j/schema.js`](src/lib/neo4j/schema.js)):** Almacena nodos `LegalOKF` con embeddings de 384d, enlaces `[:CONCUERDA_CON]`, `ConceptoOntologico` y nodos `ReglaDeontica` con identificador único por artículo (`<okf_id>::<regla.id>`), limpiando aristas obsoletas al re-ingestar.
+* Segmenta el documento en artículos/cláusulas atómicas (`norma-<slug>-art-<n>`, desambiguando duplicados de anexos y evitando falsos cortes por citas internas) y omite llamadas LLM en cláusulas puramente de forma o derogadas sin contenido normativo.
+* **Extracción Dinámica por Lotes Paralelos y Caché Incremental con `gemini-3.6-flash`:** Procesa hasta 25 artículos (o 25.000 caracteres) por solicitud con `thinkingBudget: 0`, prompts concisos, concurrencia paralela configurable (`GEMINI_INGEST_CONCURRENCY`) y caché/checkpoint en disco por hash de contenido ([`src/lib/okf/extraction-cache.ts`](src/lib/okf/extraction-cache.ts) en `.cache/deontic-extractions/`), extrayendo **Entidades Ontológicas** y **Reglas Deónticas** (`OBLIGACION`, `PROHIBICION`, `PERMISION`, `SANCION_NULIDAD`) sin generar reglas sintéticas falsas.
+* **Compuerta SHACL Pre-Ingesta Cacheada ([`src/lib/shacl/shapes.ttl`](src/lib/shacl/shapes.ttl)):** Valida `legal:OKFNodeShape` reutilizando el validador compilado en memoria (el selector de vigencia `#pdf-status` en la UI permite probar la admisión de normas `Vigente` o el rechazo HTTP `422` para `Historica`).
+* **Persistencia Neo4j Solapada por `UNWIND` ([`src/lib/neo4j/schema.js`](src/lib/neo4j/schema.js)):** A medida que termina cada lote de Gemini, valida SHACL, escribe `.md` en paralelo, calcula embeddings locales en batch (384d) e inserta nodos `LegalOKF`, `ConceptoOntologico`, `ReglaDeontica` (`<okf_id>::<regla.id>`) y enlaces `[:CONCUERDA_CON]` mediante transacciones `UNWIND` por bloque.
 
 ### 2. Pipeline Neuro-Simbólico de 6 Etapas ([`src/lib/gemini/agent.ts`](src/lib/gemini/agent.ts))
 1. **Clasificador de Hechos:** Extrae sujetos, parte evaluada, rol jurídico, conductas, omisiones, resultados y defensas invocadas bajo esquema Zod estricto con `gemini-3.6-flash`.
@@ -171,6 +171,7 @@ data_legal/
 │   │   ├── gemini/key-rotator.ts           # Rotador multi-clave Round-Robin + Failover + Hot-Reload
 │   │   ├── neo4j/client.ts                 # Cliente Neo4j híbrido (Vector + BM25 + Cypher + Clear)
 │   │   ├── neo4j/schema.js                 # Reconciliación compartida de esquema, índices y upsert
+│   │   ├── okf/extraction-cache.ts         # Caché/checkpoint JSONL por hash de artículo (.cache/)
 │   │   ├── okf/pdf-ingestor.ts             # Parser PDF/texto, segmentación atómica y lotes Gemini
 │   │   ├── opa/binary.js                   # Resolutor e instalador autocontenido de ./bin/opa
 │   │   ├── opa/evaluator.ts                # Evaluador Rego v1 y consulta de versión OPA

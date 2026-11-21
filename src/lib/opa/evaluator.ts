@@ -92,8 +92,6 @@ export async function evaluarEnServidorOPA(
       status: n.status,
       category: n.category,
       jurisdiction: n.jurisdiction,
-      content: n.content,
-      ontological_entities: n.ontological_entities || [],
       deontic_rules: n.deontic_rules || [],
     })),
   };
@@ -127,16 +125,20 @@ export async function evaluarEnServidorOPA(
     const opaBin = fsSync.existsSync(APP_CONFIG.opa.binPath)
       ? APP_CONFIG.opa.binPath
       : await ensureAppOpaBinary();
-    const { stdout } = await execFileAsync(opaBin, [
-      'eval',
-      '--data',
-      policyFile,
-      '--input',
-      tmpFile,
-      '--format',
-      'json',
-      APP_CONFIG.opa.queryPath,
-    ]);
+    const { stdout } = await execFileAsync(
+      opaBin,
+      [
+        'eval',
+        '--data',
+        policyFile,
+        '--input',
+        tmpFile,
+        '--format',
+        'json',
+        APP_CONFIG.opa.queryPath,
+      ],
+      { maxBuffer: 50 * 1024 * 1024 }
+    );
 
     const parsed = JSON.parse(stdout);
     const val = parsed?.result?.[0]?.expressions?.[0]?.value;

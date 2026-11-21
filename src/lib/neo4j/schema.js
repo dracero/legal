@@ -211,3 +211,207 @@ export async function linkOKFRelationsInSession(session, nodes) {
   }
   return edgeCount;
 }
+
+/**
+ * Inserta o actualiza masivamente nodos LegalOKF, ConceptoOntologico y ReglaDeontica
+ * usando UNWIND en bloques transaccionales (cientos de veces más rápido que queries 1 a 1).
+ */
+export async function upsertOKFNodesBatchInSession(session, nodesWithEmbeddings, chunkSize = 200) {
+  if (!Array.isArray(nodesWithEmbeddings) || nodesWithEmbeddings.length === 0) return;
+
+  // Agrupar por etiqueta dinámica saneada (habitualmente todos son 'Articulo')
+  const byLabel = new Map();
+  for (const item of nodesWithEmbeddings) {
+    const safeLabel =
+      (item.node.node_type || 'Articulo').replace(/[^a-zA-Z0-9_]/g, '') || 'Articulo';
+    if (!byLabel.has(safeLabel)) byLabel.set(safeLabel, []);
+    byLabel.get(safeLabel).push(item);
+  }
+
+  for (const [safeLabel, group] of byLabel.entries()) {
+    for (let start = 0; start < group.length; start += chunkSize) {
+      const slice = group.slice(start, start + chunkSize);
+      const okfIds = [];
+      const rows = [];
+      const entityRows = [];
+      const ruleRows = [];
+
+      for (const { node, embedding } of slice) {
+        const ontologicalEntities = Array.isArray(node.ontological_entities)
+          ? node.ontological_entities
+          : [];
+        const deonticRules = Array.isArray(node.deontic_rules) ? node.deontic_rules : [];
+
+        okfIds.push(node.okf_id);
+        rows.push({
+          okf_id: node.okf_id,
+          title: node.title,
+          node_type: node.node_type || 'Articulo',
+          law_number: node.law_number || '',
+          article_number: node.article_number || '',
+          hierarchy_level: node.hierarchy_level || '',
+          domain: node.domain || 'Derecho_General',
+          category: node.category || '',
+          jurisdiction: node.jurisdiction || 'General',
+          status: node.status || 'Vigente',
+          last_updated: node.last_updated || '',
+          content: node.content || '',
+          embedding,
+          ontologicalEntitiesJson: JSON.stringify(ontologicalEntities),
+          deonticRulesJson: JSON.stringify(deonticRules),
+        });
+
+        for (const ent of ontologicalEntities) {
+          if (!ent || !ent.nombre) continue;
+          entityRows.push({
+            okf_id: node.okf_id,
+            nombre: ent.nombre,
+            categoria: ent.categoria || 'ConceptoJuridico',
+            descripcion: ent.descripcion || '',
+          });
+        }
+
+        for (const regla of deonticRules) {
+          if (!regla || !regla.id) continue;
+          ruleRows.push({
+            okf_id: node.okf_id,
+            reglaId: `${node.okf_id}::${regla.id}`,
+            ruleCode: regla.id,
+            modalidad: regla.modalidad,
+            sujeto: regla.sujeto_normado || '',
+            conducta: regla.conducta || '',
+            condicion: regla.condicion || '',
+            consecuencia: regla.consecuencia || '',
+          });
+        }
+      }
+
+      await session.executeWrite(async (tx) => {
+        await tx.run(
+          `
+          UNWIND $rows AS row
+          MERGE (n:LegalOKF {okf_id: row.okf_id})
+          SET n:${safeLabel},
+              n.title = row.title,
+              n.node_type = row.node_type,
+              n.law_number = row.law_number,
+              n.article_number = row.article_number,
+              n.hierarchy_level = row.hierarchy_level,
+              n.domain = row.domain,
+              n.category = row.category,
+              n.jurisdiction = row.jurisdiction,
+              n.status = row.status,
+              n.last_updated = row.last_updated,
+              n.content = row.content,
+              n.embedding = row.embedding,
+              n.ontological_entities_json = row.ontologicalEntitiesJson,
+              n.deontic_rules_json = row.deonticRulesJson
+          `,
+          { rows }
+        );
+
+        await tx.run(
+          `
+          UNWIND $okfIds AS id
+          MATCH (n:LegalOKF {okf_id: id})-[:ESTABLECE_DEBER]->(r:ReglaDeontica)
+          DETACH DELETE r
+          `,
+          { okfIds }
+        );
+
+        await tx.run(
+          `
+          UNWIND $okfIds AS id
+          MATCH (n:LegalOKF {okf_id: id})-[rel:DEFINE_CONCEPTO]->(:ConceptoOntologico)
+          DELETE rel
+          `,
+          { okfIds }
+        );
+
+        if (entityRows.length > 0) {
+          await tx.run(
+            `
+            UNWIND $entityRows AS ent
+            MATCH (n:LegalOKF {okf_id: ent.okf_id})
+            MERGE (c:ConceptoOntologico {nombre: ent.nombre})
+            SET c.categoria = ent.categoria, c.descripcion = ent.descripcion
+            MERGE (n)-[:DEFINE_CONCEPTO]->(c)
+            `,
+            { entityRows }
+          );
+        }
+
+        if (ruleRows.length > 0) {
+          await tx.run(
+            `
+            UNWIND $ruleRows AS reg
+            MATCH (n:LegalOKF {okf_id: reg.okf_id})
+            MERGE (r:ReglaDeontica {id: reg.reglaId})
+            SET r.rule_code = reg.ruleCode,
+                r.okf_id = reg.okf_id,
+                r.modalidad = reg.modalidad,
+                r.sujeto_normado = reg.sujeto,
+                r.conducta = reg.conducta,
+                r.condicion = reg.condicion,
+                r.consecuencia = reg.consecuencia
+            MERGE (n)-[:ESTABLECE_DEBER]->(r)
+            `,
+            { ruleRows }
+          );
+        }
+      });
+    }
+  }
+}
+
+/**
+ * Reemplaza relaciones salientes entre nodos LegalOKF mediante UNWIND por lotes.
+ */
+export async function linkOKFRelationsBatchInSession(session, nodes, chunkSize = 200) {
+  if (!Array.isArray(nodes) || nodes.length === 0) return 0;
+
+  let edgeCount = 0;
+  for (let start = 0; start < nodes.length; start += chunkSize) {
+    const slice = nodes.slice(start, start + chunkSize);
+    const sourceIds = slice.map((n) => n.okf_id);
+
+    const edgesByType = new Map();
+    for (const node of slice) {
+      for (const rel of node.relations || []) {
+        if (!rel || !rel.target) continue;
+        const sanitizedRelType =
+          (rel.type || 'CONCUERDA_CON').replace(/[^A-Z0-9_]/gi, '_').toUpperCase() ||
+          'CONCUERDA_CON';
+        if (!edgesByType.has(sanitizedRelType)) edgesByType.set(sanitizedRelType, []);
+        edgesByType.get(sanitizedRelType).push({ source: node.okf_id, target: rel.target });
+        edgeCount++;
+      }
+    }
+
+    await session.executeWrite(async (tx) => {
+      await tx.run(
+        `
+        UNWIND $sourceIds AS srcId
+        MATCH (a:LegalOKF {okf_id: srcId})-[r]->(b:LegalOKF)
+        DELETE r
+        `,
+        { sourceIds }
+      );
+
+      for (const [relType, edges] of edgesByType.entries()) {
+        if (edges.length === 0) continue;
+        await tx.run(
+          `
+          UNWIND $edges AS edge
+          MATCH (a:LegalOKF {okf_id: edge.source})
+          MATCH (b:LegalOKF {okf_id: edge.target})
+          MERGE (a)-[:${relType}]->(b)
+          `,
+          { edges }
+        );
+      }
+    });
+  }
+
+  return edgeCount;
+}

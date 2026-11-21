@@ -168,6 +168,9 @@ export class GeminiKeyRotator {
 
       const details = total
         .map((k) => {
+          if (k.status === 'INVALID') {
+            return `${k.masked}: INVALID (clave inválida)`;
+          }
           const remainingMs = k.retryAfter ? Math.max(0, k.retryAfter - Date.now()) : 0;
           const waitLabel =
             remainingMs >= 60000
@@ -200,6 +203,31 @@ export class GeminiKeyRotator {
     return null;
   }
 
+  private extractQuotaHint(errorMsg: string): string {
+    const quotaId = errorMsg.match(/quotaId["']?:\s*["']?([^"',}\s]+)/i)?.[1];
+    const retry = this.extractRetryDelaySeconds(errorMsg);
+    const parts: string[] = [];
+    if (quotaId) parts.push(`metric=${quotaId}`);
+    if (retry !== null) parts.push(`retryDelay=${retry}s`);
+    return parts.length > 0 ? ` [${parts.join(', ')}]` : '';
+  }
+
+  /**
+   * Marca una clave como inválida (401/403 API key not valid) para descartarla sin abortar el lote
+   */
+  public markInvalid(key: string, errorMsg: string): void {
+    const entry = this.keyPool.get(key);
+    if (!entry) return;
+
+    entry.status = 'INVALID';
+    entry.failCount++;
+    entry.lastError = errorMsg;
+    entry.retryAfter = null;
+    console.warn(
+      `[Gemini Rotator] ❌ Clave ${entry.masked} inválida (UNAUTHENTICATED / API key not valid). Descartada del pool activo.`
+    );
+  }
+
   /**
    * Marca una clave como agotada por cuota diaria (RPD / RESOURCE_EXHAUSTED)
    */
@@ -216,12 +244,12 @@ export class GeminiKeyRotator {
 
     entry.retryAfter = Date.now() + retryDuration;
     console.warn(
-      `[Gemini Rotator] ⚠️ Clave ${entry.masked} agotó su cuota (RESOURCE_EXHAUSTED). Entrando en cooldown de ${Math.max(1, Math.round(retryDuration / 60000))}m.`
+      `[Gemini Rotator] ⚠️ Clave ${entry.masked} agotó su cuota diaria (RESOURCE_EXHAUSTED)${this.extractQuotaHint(errorMsg)}. Cooldown de ${Math.max(1, Math.round(retryDuration / 60000))}m.`
     );
   }
 
   /**
-   * Marca una clave con limitación transitoria por minuto (RPM)
+   * Marca una clave con limitación transitoria por minuto (RPM / TPM)
    */
   public markRateLimited(key: string, errorMsg: string, cooldownSec = 20): void {
     const entry = this.keyPool.get(key);
@@ -232,7 +260,7 @@ export class GeminiKeyRotator {
     entry.lastError = errorMsg;
     entry.retryAfter = Date.now() + cooldownSec * 1000;
     console.warn(
-      `[Gemini Rotator] ⏳ Clave ${entry.masked} con limitación transitoria. Pausada por ${cooldownSec}s.`
+      `[Gemini Rotator] ⏳ Clave ${entry.masked} con límite temporal por minuto (RPM/TPM)${this.extractQuotaHint(errorMsg)}. Pausada por ${cooldownSec}s.`
     );
   }
 
@@ -311,17 +339,40 @@ export class GeminiKeyRotator {
         const errStatus = err.status || err.code;
 
         const retrySec = this.extractRetryDelaySeconds(errMsg);
+        const isInvalidKey =
+          errStatus === 401 ||
+          errStatus === 403 ||
+          errMsg.includes('UNAUTHENTICATED') ||
+          errMsg.includes('API key not valid') ||
+          errMsg.includes('API_KEY_INVALID') ||
+          errMsg.includes('ACCESS_TOKEN_TYPE_UNSUPPORTED');
+
+        if (isInvalidKey) {
+          this.markInvalid(keyEntry.key, errMsg);
+          const remaining = this.getAvailableKeys();
+          if (remaining.length > 0) {
+            console.log(
+              `[Gemini Rotator] Saltando clave inválida y rotando a la siguiente (${remaining.length} activas)...`
+            );
+            continue;
+          }
+          throw err;
+        }
+
         const is429 =
           errStatus === 429 ||
           errMsg.includes('RESOURCE_EXHAUSTED') ||
           errMsg.includes('Quota exceeded') ||
           errMsg.includes('exceeded your current quota');
 
+        const isPerMinuteQuota =
+          /PerMinute|RequestsPerMinute|TokensPerMinute|\bRPM\b|\bTPM\b/i.test(errMsg);
+
+        // No clasificar errores que mencionan "FreeTier" como cuota diaria si son límites por minuto (RPM/TPM)
         const isDailyQuota =
           is429 &&
-          (errMsg.includes('PerDay') ||
-            errMsg.includes('requests per day') ||
-            errMsg.includes('FreeTier') ||
+          !isPerMinuteQuota &&
+          (/PerDay|requests per day|\bRPD\b|limit:\s*0\b/i.test(errMsg) ||
             (retrySec !== null && retrySec > 120));
 
         const isTransientOverload =

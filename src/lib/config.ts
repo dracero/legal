@@ -25,6 +25,8 @@ export const APP_CONFIG = {
     // Modelo único configurado (sin modelo fallback)
     model: process.env.GEMINI_MODEL || 'gemini-3.6-flash',
     maxOutputTokens: Number(process.env.GEMINI_MAX_OUTPUT_TOKENS || 32768),
+    // Concurrencia paralela de lotes en ingesta PDF (0 = automático según cantidad de API keys)
+    ingestConcurrency: Number(process.env.GEMINI_INGEST_CONCURRENCY || 0),
   },
   huggingface: {
     // Embeddings locales de Hugging Face (all-MiniLM-L6-v2 de 384 dimensiones)
@@ -55,6 +57,9 @@ export const APP_CONFIG = {
   },
   okf: {
     contentDir: path.resolve(process.env.OKF_CONTENT_DIR || './src/content/okf'),
+    extractionCacheDir: path.resolve(
+      process.env.OKF_EXTRACTION_CACHE_DIR || './.cache/deontic-extractions'
+    ),
   },
   prompts: {
     dir: path.resolve(process.env.PROMPTS_DIR || './src/lib/prompts'),
